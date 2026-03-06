@@ -99,12 +99,8 @@ export const useJudgeStore = create<JudgeState>()(
 
       fetchJudgeById: async (judgeId: number) => {
         const state = useJudgeStore.getState();
-        // Ensure loadedJudges is a Set (safety check for corrupted persisted data)
-        if (!(state.loadedJudges instanceof Set)) {
-          state.loadedJudges = new Set();
-        }
         if (state.loadedJudges.has(judgeId) && state.judge?.id === judgeId) {
-          return;
+          return; 
         }
 
         set({ isLoadingJudge: true });
@@ -245,19 +241,6 @@ export const useJudgeStore = create<JudgeState>()(
       // ==============================
       name: "judge-storage",
       storage: createJSONStorage(() => sessionStorage),
-      partialize: (state) => {
-        const { loadedJudges, ...rest } = state;
-        return rest;
-      },
-      onRehydrateStorage: () => (state) => {
-        // Ensure loadedJudges is always a Set after rehydration
-        // This fixes corrupted data from previous versions where Set was persisted
-        if (state) {
-          if (!state.loadedJudges || !(state.loadedJudges instanceof Set)) {
-            state.loadedJudges = new Set();
-          }
-        }
-      },
     }
   )
 );
