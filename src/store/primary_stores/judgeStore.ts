@@ -100,7 +100,7 @@ export const useJudgeStore = create<JudgeState>()(
       fetchJudgeById: async (judgeId: number) => {
         const state = useJudgeStore.getState();
         const loaded = state.loadedJudges instanceof Set ? state.loadedJudges : new Set<number>();
-        if (state.loadedJudges.has(judgeId) && state.judge?.id === judgeId) {
+        if (loaded.has(judgeId) && state.judge?.id === judgeId) {
           return;
         }
 
