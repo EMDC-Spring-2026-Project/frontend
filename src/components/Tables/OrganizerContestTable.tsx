@@ -63,7 +63,7 @@ export default function OrganizerContestTable(
   const { role } = useAuthStore();
   const { editContest} = useContestStore();
   const {
-    allSubmittedForContests,
+    //allSubmittedForContests,
     clearAllSubmittedForContests,
     mapScoreSheetError,
     clearMapScoreSheetError,
@@ -179,16 +179,15 @@ if (type === "current" && contests) {
     .filter((contest) => !contest.is_tabulated)
     .map((contest) => {
       const buttonText = contest.is_open ? "End Contest" : "Start Contest";
-      const disabledCond =
-        contest.is_open &&
-  allSubmittedForContests &&
-  allSubmittedForContests[contest.id] !== true;
+  //     const disabledCond =
+  //       contest.is_open &&
+  // allSubmittedForContests &&
+  // allSubmittedForContests[contest.id] !== true;
 
       return createCurrentData(
         contest.name,
         <Link
           component="button"
-          disabled={disabledCond}
           onClick={() => {
             setSelectedContest(contest);
             contest.is_open ? setEndAreYouSure(true) : setStartAreYouSure(true);
@@ -199,11 +198,11 @@ if (type === "current" && contests) {
             px: 1,
             py: 0.5,
             borderRadius: 1,
-            color: disabledCond ? "text.disabled" : theme.palette.success.main,
-            opacity: disabledCond ? 0.6 : 1,
-            "&:hover": disabledCond
-              ? {}
-              : { backgroundColor: "rgba(46,125,50,0.06)" },
+            // color: disabledCond ? "text.disabled" : theme.palette.success.main,
+            // opacity: disabledCond ? 0.6 : 1,
+            // "&:hover": disabledCond
+            //   ? {}
+            //   : { backgroundColor: "rgba(46,125,50,0.06)" },
           }}
         >
           {buttonText}
