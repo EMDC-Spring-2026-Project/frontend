@@ -83,54 +83,58 @@ export default function OrganizerModal(props: IOrganizerModalProps) {
    * Create a new organizer account with admin privileges
    * Sets default password and creates user role mapping
    */
-  const handleCreateOrganizer = async (event: React.FormEvent) => {
+  const handleCreateOrganizer = (event: React.FormEvent) => {
     event.preventDefault();
-    try {
-      // Remove hover/focus from the submit button to avoid lingering hover styles
-      if (typeof window !== "undefined" && document.activeElement instanceof HTMLElement) {
-        document.activeElement.blur();
-      }
-      // Create organizer with provided information and default password
-      await createOrganizer({
-        first_name: first_name,
-        last_name: last_name,
-        username: username,
-        password: "password",
-      });
-      
-      toast.success("Organizer created successfully!");
-      handleCloseModal(); // Use handleCloseModal to reset fields
-    } catch (error: any) {
-      handleAccountError(error, "create");
+    // Remove hover/focus from the submit button to avoid lingering hover styles
+    if (typeof window !== "undefined" && document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
     }
+    // Close modal immediately for faster UX
+    handleCloseModal();
+    // Create organizer asynchronously
+    createOrganizer({
+      first_name: first_name,
+      last_name: last_name,
+      username: username,
+      password: "password",
+    })
+      .then(() => {
+        toast.success("Organizer created successfully!");
+      })
+      .catch((error: any) => {
+        // Show error toast (modal already closed, user can retry by reopening)
+        handleAccountError(error, "create");
+      });
   };
 
   /**
    * Update existing organizer information
    * Preserves organizer ID while updating personal details and credentials
    */
-  const handleEditOrganizer = async (event: React.FormEvent) => {
+  const handleEditOrganizer = (event: React.FormEvent) => {
     event.preventDefault();
     if (organizerid) {
-      try {
-        // Remove hover/focus from the submit button to avoid lingering hover styles
-        if (typeof window !== "undefined" && document.activeElement instanceof HTMLElement) {
-          document.activeElement.blur();
-        }
-        // Update organizer with current form values
-        await editOrganizer({
-          id: organizerid,
-          first_name,
-          last_name,
-          username,
-          password: "password",
-        });
-        
-        toast.success("Organizer updated successfully!");
-        handleCloseModal(); // Use handleCloseModal to reset fields
-      } catch (error: any) {
-        handleAccountError(error, "update");
+      // Remove hover/focus from the submit button to avoid lingering hover styles
+      if (typeof window !== "undefined" && document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
       }
+      // Close modal immediately for faster UX
+      handleCloseModal();
+      // Update organizer asynchronously
+      editOrganizer({
+        id: organizerid,
+        first_name,
+        last_name,
+        username,
+        password: "password",
+      })
+        .then(() => {
+          toast.success("Organizer updated successfully!");
+        })
+        .catch((error: any) => {
+          // Show error toast (modal already closed, user can retry by reopening)
+          handleAccountError(error, "update");
+        });
     }
   };
 

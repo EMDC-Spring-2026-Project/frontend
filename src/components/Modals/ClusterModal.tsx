@@ -61,43 +61,45 @@ export default function ClusterModal(props: IClusterModalProps) {
     setClusterType("preliminary");
   };
 
-  const handleCreateCluster = async (event: React.FormEvent) => {
+  const handleCreateCluster = (event: React.FormEvent) => {
     event.preventDefault();
     if (effectiveContestId) {
-      try {
-        const createdCluster = await createCluster({
-          cluster_name: clusterName,
-          cluster_type: clusterType,
-          contestid: effectiveContestId,
+      handleCloseModal();
+      createCluster({
+        cluster_name: clusterName,
+        cluster_type: clusterType,
+        contestid: effectiveContestId,
+      })
+        .then((createdCluster) => {
+          if (createdCluster) {
+            addClusterToContest(effectiveContestId, createdCluster);
+          }
+          toast.success("Cluster created successfully!");
+        })
+        .catch((error) => {
+          console.error("Failed to create cluster", error);
+          toast.error("Failed to create cluster");
         });
-        if (createdCluster) {
-          addClusterToContest(effectiveContestId, createdCluster);
-        }
-        toast.success("Cluster created successfully!");
-        handleCloseModal();
-      } catch (error) {
-        console.error("Failed to create cluster", error);
-        toast.error("Failed to create cluster");
-      }
     }
   };
 
-  const handleEditCluster = async (event: React.FormEvent) => {
+  const handleEditCluster = (event: React.FormEvent) => {
     event.preventDefault();
     if (clusterData?.id && effectiveContestId) {
-      try {
-        const updatedCluster = await editCluster({ id: clusterData.id, cluster_name: clusterName });
-        if (updatedCluster) {
-          updateClusterInContest(effectiveContestId, updatedCluster);
-        }
-        toast.success("Cluster updated successfully!");
-        handleCloseModal();
-        onSuccess && onSuccess();
-      } catch (error: any) {
-        console.error("Failed to edit cluster", error);
-        const errorMessage = error?.response?.data?.error || error?.message || "Failed to update cluster";
-        toast.error(errorMessage);
-      }
+      handleCloseModal();
+      editCluster({ id: clusterData.id, cluster_name: clusterName })
+        .then((updatedCluster) => {
+          if (updatedCluster) {
+            updateClusterInContest(effectiveContestId, updatedCluster);
+          }
+          toast.success("Cluster updated successfully!");
+          onSuccess && onSuccess();
+        })
+        .catch((error: any) => {
+          console.error("Failed to edit cluster", error);
+          const errorMessage = error?.response?.data?.error || error?.message || "Failed to update cluster";
+          toast.error(errorMessage);
+        });
     } else {
       toast.error("Missing cluster or contest context. Please retry from Manage Contest.");
     }

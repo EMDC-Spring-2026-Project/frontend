@@ -274,8 +274,8 @@ export default function AssignJudgeToContestModal(
    * Handle form submission for judge assignment
    * Validates form data and creates judge-contest-cluster assignment
    */
-  const handleSubmit = async () => {
-    if (isSubmitting) return; 
+  const handleSubmit = () => {
+    if (isSubmitting) return;
 
     // Validate required selections
     if (selectedJudgeId === -1 || selectedContestId === -1 || selectedClusterId === -1) {
@@ -295,63 +295,63 @@ export default function AssignJudgeToContestModal(
     setError(null);
     setSuccess(null);
 
-    try {
-      // Prepare assignment payload with judge, contest, cluster, and score sheet preferences
-      const payload = {
-        judge_id: selectedJudgeId,
-        contest_id: selectedContestId,
-        cluster_id: selectedClusterId,
-        ...scoreSheets,
-      };
+    const loadingToast = toast.loading("Assigning judge to contest...");
 
-      const response = await api.post(
-        "/api/mapping/contestToJudge/assign/",
-        payload,
-      );
+    // Close modal immediately for faster UX
+    handleClose();
 
-      setSuccess(response?.data?.message || "Judge successfully assigned to contest!");
+    // Reset form
+    setSelectedJudgeId(-1);
+    setSelectedContestId(contestId || -1);
+    setSelectedClusterId(-1);
+    setScoreSheets({
+      presentation: false,
+      journal: false,
+      mdo: false,
+      runpenalties: false,
+      otherpenalties: false,
+      redesign: false,
+      championship: false,
+    });
 
-      // Refresh assigned judge-cluster pairs from server to ensure accuracy
-      // This ensures the list is synced with the backend state
-      await loadClustersForContest(selectedContestId, true);
+    // Prepare assignment payload with judge, contest, cluster, and score sheet preferences
+    const payload = {
+      judge_id: selectedJudgeId,
+      contest_id: selectedContestId,
+      cluster_id: selectedClusterId,
+      ...scoreSheets,
+    };
 
-      onSuccess?.();
+    api.post("/api/mapping/contestToJudge/assign/", payload)
+      .then(async (response) => {
+        setSuccess(response?.data?.message || "Judge successfully assigned to contest!");
+        // Refresh assigned judge-cluster pairs from server to ensure accuracy
+        await loadClustersForContest(selectedContestId, true);
+        onSuccess?.();
+        toast.success("Judge assigned to contest successfully!", { id: loadingToast });
+      })
+      .catch((err: any) => {
+        const errorMessage = err?.response?.data?.error || err?.response?.data?.detail || "Failed to assign judge to contest";
 
-      // Reset form 
-      setSelectedJudgeId(-1);
-      setSelectedContestId(contestId || -1);
-      setSelectedClusterId(-1);
-      setScoreSheets({
-        presentation: false,
-        journal: false,
-        mdo: false,
-        runpenalties: false,
-        otherpenalties: false,
-        redesign: false,
-        championship: false,
+        // Check for preliminary cluster error - don't show toast for this
+        if (errorMessage.toLowerCase().includes("preliminary") &&
+            errorMessage.toLowerCase().includes("already assigned")) {
+          setError(errorMessage);
+          toast.error(errorMessage, { id: loadingToast });
+        }
+        // Check for specific error about no teams in cluster
+        else if (errorMessage.toLowerCase().includes("no teams") ||
+            (errorMessage.toLowerCase().includes("teams") && errorMessage.toLowerCase().includes("cluster"))) {
+          setError("Cannot assign judge: The selected cluster has no teams. Please add teams to the cluster first or select a different cluster.");
+          toast.error("Cannot assign judge: The selected cluster has no teams. Please add teams to the cluster first.", { id: loadingToast });
+        } else {
+          setError(errorMessage);
+          toast.error("Failed to assign judge to contest. Please try again.", { id: loadingToast });
+        }
+      })
+      .finally(() => {
+        setIsSubmitting(false);
       });
-      toast.success("Judge assigned to contest successfully!");
-      handleClose();
-    } catch (err: any) {
-      const errorMessage = err?.response?.data?.error || err?.response?.data?.detail || "Failed to assign judge to contest";
-      
-      // Check for preliminary cluster error - don't show toast for this
-      if (errorMessage.toLowerCase().includes("preliminary") && 
-          errorMessage.toLowerCase().includes("already assigned")) {
-        setError(errorMessage);
-      } 
-      // Check for specific error about no teams in cluster
-      else if (errorMessage.toLowerCase().includes("no teams") || 
-          (errorMessage.toLowerCase().includes("teams") && errorMessage.toLowerCase().includes("cluster"))) {
-        setError("Cannot assign judge: The selected cluster has no teams. Please add teams to the cluster first or select a different cluster.");
-        toast.error("Cannot assign judge: The selected cluster has no teams. Please add teams to the cluster first.");
-      } else {
-        setError(errorMessage);
-        toast.error("Failed to assign judge to contest. Please try again.");
-      }
-    } finally {
-      setIsSubmitting(false);
-    }
   };
 
   const handleCloseModal = () => {

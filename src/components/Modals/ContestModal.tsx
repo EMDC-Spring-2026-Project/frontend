@@ -53,49 +53,51 @@ export default function ContestModal(props: IContestModalProps) {
     }
   }, [contestData]);
 
-  const handleCreateContest = async (event: React.FormEvent) => {
+  const handleCreateContest = (event: React.FormEvent) => {
     event.preventDefault();
-    try {
-      await createContest({
-        name: contestName,
-        date: contestDate ? contestDate.format("YYYY-MM-DD") : "",
-        is_open: false,
-        is_tabulated: false,
+    handleClose();
+    createContest({
+      name: contestName,
+      date: contestDate ? contestDate.format("YYYY-MM-DD") : "",
+      is_open: false,
+      is_tabulated: false,
+    })
+      .then(async () => {
+        await fetchOrganizerNamesByContests();
+        toast.success("Contest created successfully!");
+      })
+      .catch((error) => {
+        console.error("Failed to create contest: ", error);
+        toast.error("Failed to create contest. Please try again.");
       });
-      await fetchOrganizerNamesByContests();
-      toast.success("Contest created successfully!");
-      handleClose();
-    } catch (error) {
-      console.error("Failed to create contest: ", error);
-      toast.error("Failed to create contest. Please try again.");
-    }
   };
 
-  const handleEditContest = async (event: React.FormEvent) => {
+  const handleEditContest = (event: React.FormEvent) => {
     event.preventDefault();
     if (contestid) {
-      try {
-        // Get the current contest data to preserve is_open and is_tabulated
-        const currentContest = allContests.find((c) => c.id === contestid);
-        if (!currentContest) {
-          toast.error("Contest not found. Please refresh and try again.");
-          return;
-        }
-        
-        await editContest({
-          id: contestid,
-          name: contestName,
-          date: contestDate ? contestDate.format("YYYY-MM-DD") : "",
-          // Preserve existing is_open and is_tabulated values
-          is_open: currentContest.is_open,
-          is_tabulated: currentContest.is_tabulated,
-        });
-        toast.success("Contest updated successfully!");
-        handleClose();
-      } catch (error) {
-        console.error("Failed to edit contest: ", error);
-        toast.error("Failed to update contest. Please try again.");
+      // Get the current contest data to preserve is_open and is_tabulated
+      const currentContest = allContests.find((c) => c.id === contestid);
+      if (!currentContest) {
+        toast.error("Contest not found. Please refresh and try again.");
+        return;
       }
+
+      handleClose();
+      editContest({
+        id: contestid,
+        name: contestName,
+        date: contestDate ? contestDate.format("YYYY-MM-DD") : "",
+        // Preserve existing is_open and is_tabulated values
+        is_open: currentContest.is_open,
+        is_tabulated: currentContest.is_tabulated,
+      })
+        .then(() => {
+          toast.success("Contest updated successfully!");
+        })
+        .catch((error) => {
+          console.error("Failed to edit contest: ", error);
+          toast.error("Failed to update contest. Please try again.");
+        });
     }
   };
 

@@ -65,7 +65,7 @@ const Row = memo(function Row(props: {
         <TableCell
           width={56}
           sx={{
-            pl: { xs: 1, sm: 2 }, //
+            pl: { xs: 1, sm: 2 }, // ⭐ tighter padding on mobile
           }}
         >
           <IconButton
@@ -86,7 +86,7 @@ const Row = memo(function Row(props: {
         <TableCell
           component="th"
           scope="row"
-          sx={{ py: { xs: 1, sm: 2 }, pr: { xs: 1, sm: 2 } }} 
+          sx={{ py: { xs: 1, sm: 2 }, pr: { xs: 1, sm: 2 } }} // ⭐ smaller vertical padding on xs
         >
           <Stack direction="row" alignItems="center" spacing={2} minWidth={0}>
             <Box
@@ -110,7 +110,7 @@ const Row = memo(function Row(props: {
                 sx={{
                   fontWeight: 700,
                   lineHeight: 1.2,
-                  fontSize: { xs: "0.9rem", sm: "1rem" }, 
+                  fontSize: { xs: "0.9rem", sm: "1rem" }, // ⭐ slightly smaller on mobile
                 }}
                 noWrap
                 title={`${row.first_name} ${row.last_name}`}
@@ -225,22 +225,12 @@ const Row = memo(function Row(props: {
         </TableCell>
       </TableRow>
 
-      <TableRow
-          sx={{
-            display: open ? "table-row" : "none",
-            "& > td": {
-              borderBottom: 0,
-              borderLeft: 0,
-              borderRight: 0,
-              px: { xs: 1, sm: 2 },
-            },
-          }}
+      <TableRow sx={{ display: open ? "table-row" : "none" }}>
+        <TableCell
+          style={{ paddingBottom: 0, paddingTop: 0 }}
+          colSpan={3}
+          sx={{ borderBottom: 0, px: { xs: 1, sm: 2 } }} 
         >
-          <TableCell
-            style={{ paddingBottom: 0, paddingTop: 0 }}
-            colSpan={3}
-          >
-
           <Collapse in={open} timeout="auto" unmountOnExit>
             <Box sx={{ mt: 1, mb: 1, mx: { xs: 0.5, sm: 1.5 } }}>
               {(() => {
@@ -446,17 +436,16 @@ export default function AdminOrganizerTable() {
 
   return (
     <TableContainer
-  component={Paper}
-  elevation={0}
-  sx={{
-    width: "100%",
-    overflowX: "auto",
-    borderRadius: 0,
-    boxShadow: "none",
-    backgroundColor: "transparent",
-  }}
->
-
+      component={Paper}
+      elevation={0}
+      sx={{
+        width: "100%",
+        overflowX: "auto",
+        borderRadius: 0,
+        boxShadow: "none",
+        backgroundColor: "transparent",
+      }}
+    >
       <Table
         aria-label="collapsible table"
         size="small" 

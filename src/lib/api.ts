@@ -8,6 +8,14 @@ function getCookie(name: string): string | null {
 
 export const api = axios.create({
   baseURL: "",     
+const BACKEND_ORIGIN =
+  (import.meta as any).env?.VITE_BACKEND_URL || "https://api.emdcresults.com";
+
+// API calls include /api/ prefix
+export const API_BASE_URL = BACKEND_ORIGIN;
+
+export const api = axios.create({
+  baseURL: API_BASE_URL,
   withCredentials: true,
 });
 

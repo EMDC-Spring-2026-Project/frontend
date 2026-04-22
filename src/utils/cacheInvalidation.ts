@@ -89,7 +89,6 @@ export const initializeCacheInvalidation = () => {
       rule.storageKeys.forEach(key => {
         try {
           sessionStorage.removeItem(key);
-          console.log(`[CacheInvalidation] Cleared cache for ${key} due to ${event.type} ${event.action}`);
         } catch (error) {
           console.warn(`[CacheInvalidation] Failed to clear cache for ${key}:`, error);
         }
@@ -106,7 +105,6 @@ export const invalidateCaches = (storageKeys: string[]) => {
   storageKeys.forEach(key => {
     try {
       sessionStorage.removeItem(key);
-      console.log(`[CacheInvalidation] Manually cleared cache for ${key}`);
     } catch (error) {
       console.warn(`[CacheInvalidation] Failed to clear cache for ${key}:`, error);
     }
@@ -136,7 +134,6 @@ export const clearAllCaches = () => {
   keysToRemove.forEach(key => {
     try {
       sessionStorage.removeItem(key);
-      console.log(`[CacheInvalidation] Cleared all caches: ${key}`);
     } catch (error) {
       console.warn(`[CacheInvalidation] Failed to clear cache ${key}:`, error);
     }
