@@ -159,7 +159,8 @@ export interface NewJudge {
   username: string;
   password: string;
   contestid: number;
-  clusterid: number;
+  clusterid?: number;
+  clusterids?: any[];
   role: number;
 }
 
