@@ -43,13 +43,22 @@ export default defineConfig(({ mode }) => {
       host: "0.0.0.0",
       hmr: { host: "localhost", port: 7001 }, // keep your existing HMR settings
       proxy: {
-        "/api": {
-          target,
-          changeOrigin: true,
-          secure: false,
-          cookieDomainRewrite: "localhost",
+          "/api": {
+            target,
+            changeOrigin: true,
+            secure: false,
+            // Remove cookieDomainRewrite to preserve original cookie domains
+            configure: (proxy, _options) => {
+              proxy.on("error", (err) => console.log("proxy error", err));
+              proxy.on("proxyReq", (_proxyReq, req) =>
+                console.log("Sending Request to Target:", req.method, req.url)
+              );
+              proxy.on("proxyRes", (proxyRes, req) =>
+                console.log("Received Response:", proxyRes.statusCode, req.url)
+              );
+            },
+          },
         },
-      },
     },
   };
 });
