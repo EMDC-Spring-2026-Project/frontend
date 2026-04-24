@@ -1,4 +1,6 @@
 import axios, { AxiosHeaders } from "axios";
+import { api, API_BASE_URL } from "./api";
+import type { InternalAxiosRequestConfig } from "axios";
 
 function getCookie(name: string): string | null {
   const match = document.cookie.match(`(?:^|; )${name}=([^;]*)`);
@@ -7,16 +9,18 @@ function getCookie(name: string): string | null {
 
 axios.defaults.withCredentials = true;
 
+// CSRF endpoint: /api/auth/csrf/
+const CSRF_URL = `${API_BASE_URL}/api/auth/csrf/`;
+
 // Prime the CSRF cookie once in the browser so subsequent POSTs succeed
 // Use requestIdleCallback for non-blocking initialization
 if (typeof window !== "undefined") {
   const fetchCSRF = () => {
-    fetch("/api/auth/csrf/", { credentials: "include" }).catch(() => {
+    fetch(CSRF_URL, { credentials: "include" }).catch(() => {
       // ignore — login/signup will retry automatically if needed
     });
   };
-  
-  // Use requestIdleCallback if available (non-blocking), otherwise setTimeout
+
   if (window.requestIdleCallback) {
     window.requestIdleCallback(fetchCSRF, { timeout: 2000 });
   } else {
@@ -24,7 +28,7 @@ if (typeof window !== "undefined") {
   }
 }
 
-axios.interceptors.request.use((config) => {
+api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   // Remove any stale Authorization header; rely on session cookie instead
   if (!config.headers) config.headers = new AxiosHeaders();
   const headers = config.headers as AxiosHeaders;
@@ -34,6 +38,8 @@ axios.interceptors.request.use((config) => {
     const csrf = getCookie("csrftoken");
     if (csrf) {
       headers.set("X-CSRFToken", csrf);
+    } else {
+      console.warn("No CSRF token found in cookie");
     }
   }
   return config;

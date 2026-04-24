@@ -76,8 +76,6 @@ export const useMapScoreSheetStore = create<MapScoreSheetState>()(
       },
 
       clearMappings: () => {
-        console.log("[mapScoreSheetStore] clearMappings called");
-        console.trace(); 
         set({ mappings: {} });
       },
 

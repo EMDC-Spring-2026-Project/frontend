@@ -259,15 +259,6 @@ const JudgeDashboardTable = React.memo(function JudgeDashboardTable(props: IJudg
     }
   }, [visibleTeams.length, onVisibleTeamsChange]);
 
-  console.log(
-  "[JudgeDashboardTable render]",
-  {
-    judgeId: judge?.id,
-    mappingsKeys: Object.keys(mappings).length,
-    contestsForTeamsKeys: Object.keys(contestsForTeams || {}).length,
-    visibleTeams: visibleTeams.length,
-  }
-);
 
  
 

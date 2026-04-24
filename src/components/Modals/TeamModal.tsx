@@ -10,7 +10,6 @@ import {
 import Modal from "./Modal";
 import theme from "../../theme";
 import toast from "react-hot-toast";
-import { handleAccountError } from "../../utils/errorHandler";
 import { useEffect, useState } from "react";
 import { useTeamStore } from "../../store/primary_stores/teamStore";
 import useMapClusterTeamStore from "../../store/map_stores/mapClusterToTeamStore";
@@ -53,6 +52,7 @@ export default function TeamModal(props: ITeamModalProps) {
   // Initializes all scores to 0 and creates coach login credentials
   const handleCreateTeam = async () => {
     if (contestId) {
+      const loadingToast = toast.loading("Creating team and coach account...");
       try {
         // Remove hover/focus from the submit button to avoid lingering hover styles
         if (typeof window !== "undefined" && document.activeElement instanceof HTMLElement) {
@@ -98,17 +98,17 @@ export default function TeamModal(props: ITeamModalProps) {
           } catch {}
         }
 
-        toast.success("Team created successfully!");
+        toast.success("Team created successfully!", { id: loadingToast });
         onSuccess?.();
-        handleCloseModal();
       } catch (error: any) {
-        handleAccountError(error, "create");
+        toast.error("Failed to create team. Please try again.", { id: loadingToast });
       }
     }
   };
 
   // Update existing team information and coach details
   const handleEditTeam = async () => {
+    const loadingToast = toast.loading("Updating team information...");
     try {
       // Remove hover/focus from the submit button to avoid lingering hover styles
       if (typeof window !== "undefined" && document.activeElement instanceof HTMLElement) {
@@ -142,11 +142,10 @@ export default function TeamModal(props: ITeamModalProps) {
         } catch {}
       }
 
-      toast.success("Team updated successfully!");
+      toast.success("Team updated successfully!", { id: loadingToast });
       onSuccess?.();
-      handleCloseModal();
     } catch (error: any) {
-      toast.error("Failed to update team. Please try again.");
+      toast.error("Failed to update team. Please try again.", { id: loadingToast });
     }
   };
 
@@ -175,6 +174,7 @@ export default function TeamModal(props: ITeamModalProps) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    handleCloseModal();
     if (mode === "new") {
       handleCreateTeam();
     } else {

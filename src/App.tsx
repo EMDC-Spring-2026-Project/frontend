@@ -61,7 +61,6 @@ function App() {
     currentLink === "/login" || currentLink === "/login/";
   const skipPreloader = location.state?.skipPreloader;
 
-  // ✅ Show preloader ONCE when first landing on /login, then never again
   // Skip if coming from navbar login button
   useEffect(() => {
     if (!initialLoad || !onLoginPage || skipPreloader) return;

@@ -53,7 +53,7 @@ export default function OrganizerModal(props: IAssignContestModalProps) {
   };
 
   // Assign contest to organizer
-  const handleAssignContest = async (event: React.FormEvent) => {
+  const handleAssignContest = (event: React.FormEvent) => {
     event.preventDefault();
 
     if (!contestId) {
@@ -62,16 +62,17 @@ export default function OrganizerModal(props: IAssignContestModalProps) {
     }
 
     if (organizerId) {
-      try {
-        await createContestOrganizerMapping(organizerId, contestId);
-        // Refresh the contests for this organizer to ensure UI updates
-        await fetchContestsByOrganizerId(organizerId);
-        toast.success("Contest assigned to organizer successfully!");
-        handleClose();
-      } catch (error) {
-        console.error("Failed to assign contest: ", error);
-        toast.error("Failed to assign contest. Please try again.");
-      }
+      handleClose();
+      createContestOrganizerMapping(organizerId, contestId)
+        .then(async () => {
+          // Refresh the contests for this organizer to ensure UI updates
+          await fetchContestsByOrganizerId(organizerId);
+          toast.success("Contest assigned to organizer successfully!");
+        })
+        .catch((error) => {
+          console.error("Failed to assign contest: ", error);
+          toast.error("Failed to assign contest. Please try again.");
+        });
     }
   };
 

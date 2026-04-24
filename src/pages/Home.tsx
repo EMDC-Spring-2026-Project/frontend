@@ -2,6 +2,14 @@ import { Box, Container, Typography, Paper } from "@mui/material";
 import image from "../assets/group.webp";
 import { useEffect, useRef } from "react";
 
+// Preload the hero image for faster loading
+const preloadLink = document.createElement("link");
+preloadLink.rel = "preload";
+preloadLink.as = "image";
+preloadLink.href = image;
+preloadLink.fetchPriority = "high";
+document.head.appendChild(preloadLink);
+
 export default function Home() {
 
   const imgRef = useRef<HTMLImageElement>(null);
