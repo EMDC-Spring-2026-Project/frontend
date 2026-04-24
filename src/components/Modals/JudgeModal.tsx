@@ -18,6 +18,7 @@ import {
 import Modal from "./Modal";
 import theme from "../../theme";
 import toast from "react-hot-toast";
+import { handleAccountError } from "../../utils/errorHandler";
 import { useEffect, useState } from "react";
 import useUserRoleStore from "../../store/map_stores/mapUserToRoleStore";
 import { useJudgeStore } from "../../store/primary_stores/judgeStore";
@@ -192,7 +193,7 @@ export default function JudgeModal(props: IJudgeModalProps) {
     return !isClusterInvalid && !areTitlesInvalid && !areScoreSheetsInvalid;
   };
 
-  const handleSubmit = (event: React.FormEvent) => {
+  const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
 
     if (!validateForm()) {
@@ -208,9 +209,9 @@ export default function JudgeModal(props: IJudgeModalProps) {
     handleCloseModal();
 
     if (mode === "new") {
-      handleCreateJudge();
+      await handleCreateJudge();
     } else {
-      handleEditJudge();
+      await handleEditJudge();
     }
   };
 
@@ -267,9 +268,11 @@ export default function JudgeModal(props: IJudgeModalProps) {
         }
 
         onSuccess?.();
+
         toast.success("Judge created successfully!");
+        handleCloseModal();
       } catch (error: any) {
-        toast.error("Failed to create judge. Please try again.");
+        handleAccountError(error, "create");
       }
     }
   };
@@ -397,9 +400,15 @@ export default function JudgeModal(props: IJudgeModalProps) {
 
         toast.success("Judge updated successfully!");
         onSuccess?.();
+        handleCloseModal();
       } catch (error: any) {
         console.error("Judge update error:", error);
-        toast.error("Failed to update judge. Please try again.");
+        const errorMessage = handleAccountError(error, "update");
+        setErrorMessage(errorMessage || null);
+        setErrors({
+          ...errors,
+          cluster: errorMessage ? true : false,
+        });
       }
     }
   };
@@ -468,6 +477,7 @@ export default function JudgeModal(props: IJudgeModalProps) {
           }}
         >
           <TextField
+            required
             label="First Name"
             variant="outlined"
             sx={{ 
@@ -480,6 +490,7 @@ export default function JudgeModal(props: IJudgeModalProps) {
             onChange={(e) => setFirstName(e.target.value)}
           />
           <TextField
+            required
             label="Last Name"
             variant="outlined"
             sx={{
