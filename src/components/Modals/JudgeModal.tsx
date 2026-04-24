@@ -474,6 +474,7 @@ export default function JudgeModal(props: IJudgeModalProps) {
           }}
         >
           <TextField
+            required
             label="First Name"
             variant="outlined"
             sx={{ 
@@ -486,6 +487,7 @@ export default function JudgeModal(props: IJudgeModalProps) {
             onChange={(e) => setFirstName(e.target.value)}
           />
           <TextField
+            required
             label="Last Name"
             variant="outlined"
             sx={{
