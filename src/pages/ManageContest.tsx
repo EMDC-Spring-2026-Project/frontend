@@ -21,6 +21,7 @@ import {
   Button,
   Container,
   Tab,
+  Tooltip,	
   Typography,
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
@@ -384,6 +385,8 @@ export default function ManageContest() {
       {/* Action Buttons */}
 {!contest?.is_open && (
   <Box sx={{ mb: 3, display: "flex", flexWrap: "wrap", gap: 1.5 }}>
+    <Tooltip title={!hasClusters ? "Create a cluster first" : !hasTeams ? "Create a team first" : ""}>
+      <span>
     <Button
       variant="contained"
       onClick={() => setOpenJudgeModal(true)}
@@ -404,6 +407,8 @@ export default function ManageContest() {
     >
       Create Judge
     </Button>
+  </span>
+  </Tooltip>
 
     <Button
       variant="outlined"
