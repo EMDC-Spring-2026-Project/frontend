@@ -14,6 +14,7 @@ import {
   Chip,
   IconButton,
   Typography,
+  Tooltip,
 } from "@mui/material";
 import Modal from "./Modal";
 import theme from "../../theme";
@@ -705,7 +706,7 @@ export default function JudgeModal(props: IJudgeModalProps) {
             width: { xs: "100%", sm: 350 }, 
             position: "relative" 
           }}>
-            <InputLabel sx={{ fontSize: { xs: "0.9rem", sm: "1rem" } }}>Score Sheets</InputLabel>
+            <InputLabel sx={{ fontSize: { xs: "0.9rem", sm: "1rem" } }}>Score Sheets <span>*</span></InputLabel>
             <Select
               multiple
               value={selectedSheets}
@@ -850,8 +851,11 @@ export default function JudgeModal(props: IJudgeModalProps) {
             )}
           </FormControl>
 
+	  <Tooltip title={selectedSheets.length === 0 ? "Select at least one score sheet" : ""}>
+          <span style={{ display: "inline-block", width: "100%", textAlign: "center" }}>
           <Button
             type="submit"
+	    disabled={selectedSheets.length === 0}
             sx={{
               width: { xs: "100%", sm: 130 },
               height: { xs: 40, sm: 44 },
@@ -888,6 +892,8 @@ export default function JudgeModal(props: IJudgeModalProps) {
           >
             {buttonText}
           </Button>
+	  </span>
+        </Tooltip>
         </form>
       </Container>
     </Modal>

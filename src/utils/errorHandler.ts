@@ -186,7 +186,7 @@ export const handleAccountError = (
     delete: "Failed to delete account. Please try again.",
   };
   
-  toast.error(operationMessages[operation]);
+  toast.error(errorMessage || operationMessages[operation]);
   return errorMessage;
 };
 
@@ -211,7 +211,7 @@ export const handleCrudError = (
     delete: `Failed to delete ${entityName}. Please try again.`,
   };
   
-  toast.error(operationMessages[operation]);
+  toast.error(errorMessage || operationMessages[operation]);
   return errorMessage;
 };
 
