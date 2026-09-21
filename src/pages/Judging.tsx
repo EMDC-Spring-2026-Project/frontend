@@ -203,13 +203,13 @@ export default React.memo(function Judging() {
   const fetchAllClustersForJudge = useCallback(
     async (judgeId: number, forceRefresh: boolean = false) => {
       try {
-        // Ensure contests are available (used for filtering and tabulation)
+        // Refresh contest status before deciding whether a judge may score. Contest
+        // state can change while this dashboard is open when an organizer starts,
+        // ends, or tabulates a contest.
         const contestStore = useContestStore.getState();
-        if (contestStore.allContests.length === 0) {
-          contestStore.fetchAllContests().catch(() => {
-            // Silently fail - will show all clusters if contests aren't available
-          });
-        }
+        await contestStore.fetchAllContests(true).catch(() => {
+          // Silently fail - will show all clusters if contests aren't available.
+        });
 
         // Fetch all clusters for this judge
         const [allClusters] = await Promise.all([

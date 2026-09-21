@@ -555,15 +555,20 @@ const Ranking = () => {
           `/api/mapping/clusterToContest/getAllClustersByContest/${contestId}/`
         );
 
-        const baseClusters: ClusterEntry[] = (clusterResp?.Clusters ?? []).map(
-          (raw: any) => ({
+        const baseClusters: ClusterEntry[] = (clusterResp?.Clusters ?? [])
+          .filter(
+            (raw: any) =>
+              (raw.cluster_name ?? raw.name ?? "").trim().toLowerCase() !==
+              "all teams"
+          )
+          .map((raw: any) => ({
             id: raw.id,
             cluster_name: raw.cluster_name ?? raw.name ?? "Unnamed Cluster",
             cluster_type: raw.cluster_type ?? "preliminary",
-          teams: [],
-          _statusFetched: false,
+            teams: [],
+            _statusFetched: false,
           })
-        );
+          );
 
         const clustersWithTeams = await Promise.all(
           baseClusters.map((cluster) => fetchClusterTeams(cluster))

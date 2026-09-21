@@ -7,7 +7,8 @@ Engineering Machine Design Competition (EMDC) Frontend Application - A modern Re
 ### 1. Without Docker
 
 ```bash
-npm install
+# Requires Node.js 22.12+
+npm ci
 npm run dev
 ```
 
