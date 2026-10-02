@@ -41,7 +41,6 @@ export default defineConfig(({ mode }) => {
     server: {
       watch: { usePolling: true },
       host: "0.0.0.0",
-      hmr: { host: "localhost", port: 7001 }, // keep your existing HMR settings
       proxy: {
           "/api": {
             target,

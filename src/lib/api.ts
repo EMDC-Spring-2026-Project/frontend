@@ -6,7 +6,7 @@ function getCookie(name: string): string | null {
 }
 
 const BACKEND_ORIGIN =
-  (import.meta as any).env?.VITE_BACKEND_URL || "https://api.emdcresults.com";
+  (import.meta.env.VITE_BACKEND_URL || (import.meta.env.DEV ? "" : "https://api.emdcresults.com")).replace(/\/+$/, "");
 
 export const API_BASE_URL = BACKEND_ORIGIN;
 
@@ -38,7 +38,7 @@ api.interceptors.request.use((config) => {
 });
 
 export function getAllOrganizers() {
-  return api.get("/organizer/getAll/");
+  return api.get("/api/organizer/getAll/");
 }
 
 // Response interceptor to handle authentication errors

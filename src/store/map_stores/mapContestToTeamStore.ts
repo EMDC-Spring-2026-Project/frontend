@@ -74,19 +74,11 @@ export const useMapContestToTeamStore = create<MapContestToTeamState>()(
       },
 
       fetchContestsByTeams: async (teams: Team[]) => {
-        // Check cache first - if we already have contest data for all teams, return early
-        const state = get();
-        const teamsNeedingData = teams.filter(team => !state.contestsForTeams[team.id]);
-        
-        if (teamsNeedingData.length === 0) {
-          return; // All teams already have cached contest data
-        }
-        
         set({ isLoadingMapContestToTeam: true });
         try {
           const response = await api.post(
             "/api/mapping/contestToTeam/contestsByTeams/",
-            teamsNeedingData
+            teams
           );
 
           set((currentState) => ({
