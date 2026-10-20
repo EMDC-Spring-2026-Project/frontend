@@ -215,7 +215,7 @@ export const useMapScoreSheetStore = create<MapScoreSheetState>()(
         set({ isLoadingMapScoreSheet: true });
         try {
           const response = await api.post(
-            `/api/scoreSheet/mapping/create/`,
+            `/api/mapping/scoreSheet/create/`,
             mapping
           );
           const newScoreSheetId = response.data.scoresheetid;
@@ -235,7 +235,7 @@ export const useMapScoreSheetStore = create<MapScoreSheetState>()(
       deleteScoreSheetMapping: async (mapId: number) => {
         set({ isLoadingMapScoreSheet: true });
         try {
-          await api.delete(`/api/scoreSheet/mapping/delete/${mapId}/`);
+          await api.delete(`/api/mapping/scoreSheet/delete/${mapId}/`);
           set({ scoreSheetId: null });
           set({ mapScoreSheetError: null });
         } catch (error) {
