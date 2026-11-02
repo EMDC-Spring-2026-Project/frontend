@@ -7,7 +7,7 @@
 // ==============================
 // React Core
 // ==============================
-import { useEffect, useState, useMemo, useRef } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
 
 // ==============================
@@ -30,8 +30,6 @@ import useSpecialAwardStore from "../store/map_stores/mapAwardToTeamStore";
 import { useMapCoachToTeamStore } from "../store/map_stores/mapCoachToTeamStore";
 import { useContestStore } from "../store/primary_stores/contestStore";
 import { useMapClusterToContestStore } from "../store/map_stores/mapClusterToContestStore";
-import useContestJudgeStore from "../store/map_stores/mapContestToJudgeStore";
-import { useAuthStore } from "../store/primary_stores/authStore";
 
 // ==============================
 // Local Components
@@ -45,16 +43,16 @@ export default function ContestScores() {
   // Route Parameters & Authentication
   // ------------------------------
   const { contestId } = useParams<{ contestId: string }>();
-  const contestIdNumber = contestId ? parseInt(contestId, 10) : null;
-  const { role } = useAuthStore();
-  const isCoach = role?.user_type === 4;
+  const parsedContestId = contestId && /^\d+$/.test(contestId) ? Number(contestId) : NaN;
+  const contestIdNumber = Number.isSafeInteger(parsedContestId) && parsedContestId > 0
+    ? parsedContestId
+    : null;
 
   // ------------------------------
   // Store State & Actions
   // ------------------------------
   const { fetchContestById, contest } = useContestStore();
   const { fetchClustersByContestId } = useMapClusterToContestStore();
-  const { getAllJudgesByContestId } = useContestJudgeStore();
 
   const {
     teamsByContest,
@@ -70,7 +68,9 @@ export default function ContestScores() {
   // ------------------------------
   const [activeTab, setActiveTab] = useState("prelim");
   const [hasCelebrated, setHasCelebrated] = useState(false);
-  const lastContestIdRef = useRef<number | null>(null);
+  const [resultsReadyForContest, setResultsReadyForContest] = useState<number | null>(null);
+  const [resultsLoadError, setResultsLoadError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
   const [resultsTheme, setResultsTheme] = useState<ThemeType>("green");
 
   // Theme primary color mapping
@@ -129,17 +129,56 @@ export default function ContestScores() {
   useEffect(() => {
     if (!contestIdNumber) return;
 
-    lastContestIdRef.current = contestIdNumber;
+    let refreshInFlight = false;
+    let isActive = true;
+    const refreshContestResults = () => {
+      if (document.visibilityState !== "visible" || refreshInFlight) return;
+      refreshInFlight = true;
+      setResultsReadyForContest(null);
+      setResultsLoadError(null);
+      fetchContestById(contestIdNumber, true)
+        .then(async () => {
+          if (!isActive) return;
 
-    Promise.all([
-      fetchTeamsByContest(contestIdNumber),
-      fetchContestById(contestIdNumber),
-      fetchClustersByContestId(contestIdNumber),
-      getAllJudgesByContestId(contestIdNumber),
-    ]).catch((error) => {
-      console.error("Error fetching contest data:", error);
-    });
-  }, [contestIdNumber, fetchTeamsByContest, fetchContestById, fetchClustersByContestId, getAllJudgesByContestId]);
+          const loadedContest = useContestStore.getState().contest;
+          if (loadedContest?.id !== contestIdNumber) {
+            throw new Error("The requested contest could not be loaded.");
+          }
+          const resultsAreFinal =
+            loadedContest?.id === contestIdNumber &&
+            loadedContest.results_published === true;
+
+          // This is the public results page. Avoid fetching team data at all
+          // until the contest is closed and tabulation has been finalized.
+          if (resultsAreFinal) {
+            await Promise.all([
+              fetchTeamsByContest(contestIdNumber, true),
+              fetchClustersByContestId(contestIdNumber, true),
+            ]);
+          }
+
+          if (isActive) setResultsReadyForContest(contestIdNumber);
+        })
+        .catch((error) => {
+          console.error("Error fetching contest data:", error);
+          if (isActive) {
+            setResultsLoadError("Unable to load the latest contest results. Please try again.");
+          }
+        })
+        .finally(() => {
+          refreshInFlight = false;
+        });
+    };
+
+    refreshContestResults();
+    window.addEventListener("focus", refreshContestResults);
+    document.addEventListener("visibilitychange", refreshContestResults);
+    return () => {
+      isActive = false;
+      window.removeEventListener("focus", refreshContestResults);
+      document.removeEventListener("visibilitychange", refreshContestResults);
+    };
+  }, [contestIdNumber, fetchTeamsByContest, fetchContestById, fetchClustersByContestId, retryCount]);
 
   useEffect(() => {
     setHasCelebrated(false);
@@ -202,11 +241,11 @@ export default function ContestScores() {
   }, [teamsByContest, coachNames, teamAwards]);
 
   const rankedRows = useMemo(() => {
-    const sorted = [...rows].sort((a, b) => b.total_score - a.total_score);
-    return sorted.map((team, index) => ({
-      ...team,
-      team_rank: index + 1,
-    }));
+    return [...rows].sort((a, b) => {
+      const aRank = a.team_rank > 0 ? a.team_rank : Number.MAX_SAFE_INTEGER;
+      const bRank = b.team_rank > 0 ? b.team_rank : Number.MAX_SAFE_INTEGER;
+      return aRank - bRank || a.id - b.id;
+    });
   }, [rows]);
 
   // ==============================
@@ -264,16 +303,21 @@ export default function ContestScores() {
           team_name: team.team_name,
           school_name: (team as any).school_name || "",
           team_rank: 0,
+          stored_rank: (team as any).championship_rank || 0,
           total_score: championshipScore,
           coachName: coachNames[team.id] || "N/A",
           awards: teamAwards[team.id] || "N/A",
         };
       })
-      .sort((a, b) => b.total_score - a.total_score)
+      .sort((a, b) => {
+        const aRank = a.stored_rank || Number.MAX_SAFE_INTEGER;
+        const bRank = b.stored_rank || Number.MAX_SAFE_INTEGER;
+        return aRank - bRank || a.id - b.id;
+      })
       .slice(0, 6)
       .map((team, index) => ({
         ...team,
-        team_rank: index + 1,
+        team_rank: team.stored_rank || index + 1,
       }));
     return sorted;
   }, [teamsByContest, coachNames, teamAwards]);
@@ -286,6 +330,7 @@ export default function ContestScores() {
         team_name: team.team_name,
         school_name: (team as any).school_name || "",
         team_rank: 0,
+        stored_rank: team.team_rank || 0,
         total_score:
           (team as any).redesign_total_score ||
           (team as any).redesign_score ||
@@ -294,11 +339,15 @@ export default function ContestScores() {
         coachName: coachNames[team.id] || "N/A",
         awards: teamAwards[team.id] || "N/A",
       }))
-      .sort((a, b) => b.total_score - a.total_score)
+      .sort((a, b) => {
+        const aRank = a.stored_rank || Number.MAX_SAFE_INTEGER;
+        const bRank = b.stored_rank || Number.MAX_SAFE_INTEGER;
+        return aRank - bRank || a.id - b.id;
+      })
       .slice(0, 3)
       .map((team, index) => ({
         ...team,
-        team_rank: index + 1,
+        team_rank: team.stored_rank || index + 1,
       }));
     return sorted;
   }, [teamsByContest, coachNames, teamAwards]);
@@ -307,10 +356,42 @@ export default function ContestScores() {
   // Early Returns
   // ==============================
 
-  if (isCoach && contest && contest.is_open === true) {
+  if (contestIdNumber === null) {
     return (
       <Container sx={{ mt: 3 }}>
-        <Alert severity="info">Results will be visible after the contest ends.</Alert>
+        <Alert severity="error">This contest link is invalid. Please choose a contest from the contest list.</Alert>
+        <Button component={Link} to="/contestPage/" sx={{ mt: 2 }}>View contests</Button>
+      </Container>
+    );
+  }
+
+  if (
+    contestIdNumber &&
+    (resultsReadyForContest !== contestIdNumber || contest?.id !== contestIdNumber)
+  ) {
+    return (
+      <Container sx={{ mt: 3 }}>
+        <Alert severity={resultsLoadError ? "error" : "info"}>
+          {resultsLoadError || "Checking the latest contest status…"}
+        </Alert>
+        {resultsLoadError && (
+          <Button sx={{ mt: 2 }} onClick={() => setRetryCount((count) => count + 1)}>
+            Retry loading results
+          </Button>
+        )}
+      </Container>
+    );
+  }
+
+  if (
+    contest &&
+    contest.results_published !== true
+  ) {
+    return (
+      <Container sx={{ mt: 3 }}>
+        <Alert severity="info">
+          Results have not been officially published yet. Please check again after the announcement.
+        </Alert>
       </Container>
     );
   }

@@ -61,6 +61,7 @@ export default function ContestModal(props: IContestModalProps) {
       date: contestDate ? contestDate.format("YYYY-MM-DD") : "",
       is_open: false,
       is_tabulated: false,
+      results_published: false,
     })
       .then(async () => {
         await fetchOrganizerNamesByContests();
@@ -90,6 +91,7 @@ export default function ContestModal(props: IContestModalProps) {
         // Preserve existing is_open and is_tabulated values
         is_open: currentContest.is_open,
         is_tabulated: currentContest.is_tabulated,
+        results_published: currentContest.results_published ?? false,
       })
         .then(() => {
           toast.success("Contest updated successfully!");

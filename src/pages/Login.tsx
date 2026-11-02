@@ -17,7 +17,7 @@ import { useEffect, useState } from "react";
 import { Visibility, VisibilityOff } from "@mui/icons-material";
 import theme from "../theme";
 import { useAuthStore } from "../store/primary_stores/authStore";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 export default function Login() {
   const { login, isLoadingAuth, authError, role, isAuthenticated } = useAuthStore();
@@ -27,6 +27,8 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
 
   const navigate = useNavigate();
+  const location = useLocation();
+  const sessionExpired = new URLSearchParams(location.search).get("reason") === "session-expired";
 
   // Redirect after successful login based on role
   useEffect(() => {
@@ -154,6 +156,11 @@ export default function Login() {
           {authError != null && (
             <Alert sx={{ mt: 3 }} severity="error">
               {authError}
+            </Alert>
+          )}
+          {sessionExpired && authError == null && (
+            <Alert sx={{ mt: 3 }} severity="warning">
+              Your session expired. Please log in again to continue.
             </Alert>
           )}
         </form>

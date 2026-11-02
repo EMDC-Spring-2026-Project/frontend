@@ -45,7 +45,7 @@ export default function ContestTable({
         component={Paper}
         sx={{
           borderRadius: 3,
-          overflow: "hidden",
+          overflowX: "auto",
           boxShadow: 3,
           zIndex: 1, // Ensure table is above gear
           position: "relative",
@@ -53,7 +53,9 @@ export default function ContestTable({
       >
         <Table
           aria-label="contest table"
+          aria-busy={isLoading}
           sx={{
+            minWidth: 480,
             "& th:first-of-type, & td:first-of-type": { pl: 1 },
           }}
         >
@@ -76,13 +78,33 @@ export default function ContestTable({
               </TableRow>
             )}
             {!isLoading &&
+              rows.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={3} align="center">
+                    <Typography>No contests are available to view yet.</Typography>
+                  </TableCell>
+                </TableRow>
+              )}
+            {!isLoading &&
               rows.map((row) => (
                 <TableRow
                   key={row.id}
                   hover
+                  tabIndex={0}
+                  aria-label={`View ${row.name}, ${row.status}`}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      onRowClick(row.id);
+                    }
+                  }}
                   onClick={() => onRowClick(row.id)}
                   sx={{
                     cursor: "pointer",
+                    "&:focus-visible": {
+                      outline: `3px solid ${theme.palette.primary.main}`,
+                      outlineOffset: -3,
+                    },
                     transition: "background-color 0.2s ease, transform 0.1s ease",
                     "&:hover": {
                       backgroundColor: theme.palette.primary.light,

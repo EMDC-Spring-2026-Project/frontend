@@ -4,6 +4,8 @@
 import * as React from "react";
 import {
   Box,
+  Alert,
+  Button,
   Collapse,
   IconButton,
   Table,
@@ -60,6 +62,9 @@ export default function Coach() {
   // Local UI State
   // ------------------------------
   const [hasLoaded, setHasLoaded] = useState(false);
+  const [teamLoadFailed, setTeamLoadFailed] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+  const coachId = role?.user.id;
   const isInitialLoadRef = useRef(true);
 
   // ==============================
@@ -72,29 +77,62 @@ export default function Coach() {
    * Clear teams on unmount.
    */
   useEffect(() => {
-    if (role?.user.id) {
-      fetchTeamsByCoachId(role.user.id).then(() => {
-        setHasLoaded(true);
-        isInitialLoadRef.current = false;
-      });
+    let active = true;
+    setHasLoaded(false);
+    setTeamLoadFailed(false);
+    if (coachId) {
+      void fetchTeamsByCoachId(coachId)
+        .catch(() => { if (active) setTeamLoadFailed(true); })
+        .finally(() => {
+          if (active) {
+            setHasLoaded(true);
+            isInitialLoadRef.current = false;
+          }
+        });
     }
     return () => {
+      active = false;
       clearTeams();
     };
-  }, [role]);
+  }, [coachId, fetchTeamsByCoachId, clearTeams, retryCount]);
 
   /**
    * Once teams are available, fetch contests for those teams.
    * Clear contest mapping on unmount.
    */
   useEffect(() => {
+    let refreshInFlight = false;
+    const loadContestAssignments = (forceRefresh = false) => {
+      if (teams.length === 0 || refreshInFlight) return;
+
+      refreshInFlight = true;
+      void fetchContestsByTeams(teams, forceRefresh)
+        .catch(() => undefined)
+        .finally(() => {
+          refreshInFlight = false;
+        });
+    };
+
     if (teams.length > 0) {
-      fetchContestsByTeams(teams);
+      loadContestAssignments();
     }
+
+    const refreshContestAssignments = () => {
+      if (document.visibilityState === "visible" && teams.length > 0) {
+        // Another organizer may have changed a team's contest while this tab
+        // was inactive, so bypass the short-lived cache when returning.
+        loadContestAssignments(true);
+      }
+    };
+    window.addEventListener("focus", refreshContestAssignments);
+    document.addEventListener("visibilitychange", refreshContestAssignments);
+
     return () => {
+      window.removeEventListener("focus", refreshContestAssignments);
+      document.removeEventListener("visibilitychange", refreshContestAssignments);
       clearContests();
     };
-  }, [teams]);
+  }, [teams, fetchContestsByTeams, clearContests]);
 
 
   /**
@@ -256,6 +294,14 @@ export default function Coach() {
   return (
     <Box sx={{ pb: 8, backgroundColor: "#fafafa", minHeight: "100vh" }}>
       <Container maxWidth="lg">
+        {!hasLoaded && <Alert severity="info" sx={{ mt: 2 }}>Loading your teams…</Alert>}
+        {teamLoadFailed && (
+          <Alert severity="error" sx={{ mt: 2 }} action={
+            <Button color="inherit" onClick={() => setRetryCount((count) => count + 1)}>Retry</Button>
+          }>
+            Unable to load your teams. Please try again.
+          </Alert>
+        )}
         {/* Fade-in wrapper for the page once data is ready */}
         <Box
           sx={{

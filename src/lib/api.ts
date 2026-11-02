@@ -55,9 +55,20 @@ api.interceptors.response.use(
         errorMessage.includes("Authentication credentials") ||
         errorMessage.includes("not authenticated")
       ) {
-        if (window.location.pathname !== "/login/") {
-          console.warn("Session expired. Please log in again.");
-          // window.location.href = "/login/"
+        let hadActiveSession = false;
+        try {
+          const savedAuth = sessionStorage.getItem("auth-storage");
+          hadActiveSession = Boolean(
+            savedAuth && JSON.parse(savedAuth)?.state?.isAuthenticated
+          );
+        } catch {
+          // Corrupt browser storage should not prevent a safe sign-out.
+          hadActiveSession = true;
+        }
+
+        if (hadActiveSession && window.location.pathname !== "/login/") {
+          sessionStorage.clear();
+          window.location.assign("/login/?reason=session-expired");
         }
       }
     }
