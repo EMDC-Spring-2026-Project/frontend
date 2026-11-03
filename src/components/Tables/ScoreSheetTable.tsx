@@ -27,7 +27,6 @@ import CircularProgress from "@mui/material/CircularProgress";
 import CloseIcon from "@mui/icons-material/Close";
 import CheckIcon from "@mui/icons-material/Check";
 import AreYouSureModal from "../Modals/AreYouSureModal";
-import toast from "react-hot-toast";
 
 type IScoreSheetTableProps = {
   sheetType: number;
@@ -50,6 +49,7 @@ export default function ScoreSheetTable({
 }: IScoreSheetTableProps) {
   const [openRows, setOpenRows] = React.useState<{ [key: number]: boolean }>({});
   const [openAreYouSure, setOpenAreYouSure] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { fetchScoreSheetWithData } = useMapScoreSheetStore();
   const {
@@ -210,33 +210,36 @@ export default function ScoreSheetTable({
   };
 
   const handleSubmit = async () => {
-    try {
-      if (scoreSheet) {
-        await submitScoreSheet({
-          id: scoreSheet.id,
-          isSubmitted: true,
-          sheetType: sheetType,
-          field1: formData[1],
-          field2: formData[2],
-          field3: formData[3],
-          field4: formData[4],
-          field5: formData[5],
-          field6: formData[6],
-          field7: formData[7],
-          field8: formData[8],
-          field9: formData[9]?.toString(),
-        });
-      }
-      setOpenAreYouSure(false);
-      setTimeout(() => {
-        navigate(-1);
-      }, 100);
-    } catch (error) {
-      console.error("Error submitting scoresheet:", error);
-      toast.error("Failed to submit scoresheet. Please try again.");
-      setOpenAreYouSure(false);
+  if (isSubmitting) return;
+  setIsSubmitting(true);
+  try {
+    if (scoreSheet) {
+      await submitScoreSheet({
+        id: scoreSheet.id,
+        isSubmitted: true,
+        sheetType: sheetType,
+        field1: formData[1],
+        field2: formData[2],
+        field3: formData[3],
+        field4: formData[4],
+        field5: formData[5],
+        field6: formData[6],
+        field7: formData[7],
+        field8: formData[8],
+        field9: formData[9]?.toString(),
+      });
     }
-  };
+    setOpenAreYouSure(false);
+    setTimeout(() => {
+      navigate(-1);
+    }, 100);
+  } catch (error) {
+    console.error("Error submitting scoresheet:", error);
+    setOpenAreYouSure(false);
+  } finally {
+    setIsSubmitting(false);
+  }
+};
 
   // Spinner ONLY on first load
   if (isLoadingScoreSheet && !initialLoadComplete) {
@@ -888,7 +891,7 @@ export default function ScoreSheetTable({
           type="button"
           variant="contained"
           onClick={() => setOpenAreYouSure(true)}
-          disabled={!allFieldsFilled()}
+          disabled={!allFieldsFilled() || isSubmitting}
           sx={{
             mt: 3,
             bgcolor: theme.palette.success.main,
@@ -901,7 +904,7 @@ export default function ScoreSheetTable({
             fontSize: { xs: "0.75rem", sm: "0.9375rem" },
           }}
         >
-          Submit
+        {isSubmitting ? "Submitting…" : "Submit"}
         </Button>
 
         <AreYouSureModal
