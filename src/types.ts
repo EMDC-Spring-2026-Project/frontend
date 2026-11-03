@@ -67,6 +67,7 @@ export interface Contest {
   date: string;
   is_open: boolean;
   is_tabulated: boolean;
+  results_published: boolean;
 }
 
 export interface Organizer {
@@ -82,6 +83,7 @@ export interface NewContest {
   date: string;
   is_open: boolean;
   is_tabulated: boolean;
+  results_published?: boolean;
 }
 
 export interface EditedTeam {

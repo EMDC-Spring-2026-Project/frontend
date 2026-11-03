@@ -108,14 +108,21 @@ export const useMapCoachToTeamStore = create<MapCoachTeamState>()(
         
         set({ isLoadingMapCoachToTeam: true });
         try {
-          const response = await api.post(
-            "/api/mapping/coachToTeam/coachesByTeams/",
-            teamsToFetch
+          const batchSize = 100;
+          const batches: typeof teamsToFetch[] = [];
+          for (let index = 0; index < teamsToFetch.length; index += batchSize) {
+            batches.push(teamsToFetch.slice(index, index + batchSize));
+          }
+          const responses = await Promise.all(
+            batches.map((batch) =>
+              api.post("/api/mapping/coachToTeam/coachesByTeams/", batch)
+            )
           );
+          const fetchedCoaches = Object.assign({}, ...responses.map(({ data }) => data));
           set((state) => ({
             coachesByTeams: {
               ...state.coachesByTeams,
-              ...response.data,
+              ...fetchedCoaches,
             },
             mapCoachToTeamError: null,
           }));
@@ -132,7 +139,8 @@ export const useMapCoachToTeamStore = create<MapCoachTeamState>()(
         set({ isLoadingMapCoachToTeam: true });
         try {
           const response = await api.get(
-            `/api/mapping/coachToTeam/teamsByCoach/${coachId}/`
+            `/api/mapping/coachToTeam/teamsByCoach/${coachId}/`,
+            { timeout: 20000 }
           );
           set({ teams: response.data.Teams, mapCoachToTeamError: null });
         } catch (mapCoachToTeamError: any) {

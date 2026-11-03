@@ -25,6 +25,8 @@ import useMapContestJudgeStore from "../map_stores/mapContestToJudgeStore";
 import { useMapClusterToContestStore } from "../map_stores/mapClusterToContestStore";
 import { dispatchDataChange } from "../../utils/dataChangeEvents";
 
+let contestRequestSequence = 0;
+
 // ==============================
 // Types & Interfaces
 // ==============================
@@ -40,7 +42,7 @@ interface ContestState {
 
   // CRUD operations
   fetchAllContests: (forceRefresh?: boolean) => Promise<void>;
-  fetchContestById: (contestId: number) => Promise<void>;
+  fetchContestById: (contestId: number, forceRefresh?: boolean) => Promise<void>;
   createContest: (newContest: NewContest) => Promise<void>;
   editContest: (editedContest: Contest) => Promise<void>;
   deleteContest: (contestId: number) => Promise<void>;
@@ -69,7 +71,8 @@ export const useContestStore = create<ContestState>()(
       // ==============================
 
       clearContest: () => {
-        set({ contest: null, contestError: null });
+        contestRequestSequence += 1;
+        set({ contest: null, contestError: null, isLoadingContest: false });
       },
 
       clearAllContests: () => {
@@ -88,7 +91,7 @@ export const useContestStore = create<ContestState>()(
 
         set({ isLoadingContest: true });
         try {
-          const { data } = await api.get(`/api/contest/getAll/`);
+          const { data } = await api.get(`/api/contest/getAll/`, { timeout: 20000 });
           set({ allContests: data.Contests });
           set({ contestError: null });
         } catch (contestError) {
@@ -99,30 +102,42 @@ export const useContestStore = create<ContestState>()(
         }
       },
 
-      fetchContestById: async (contestId: number) => {
-        const cachedContest = get().contest;
-        if (cachedContest && cachedContest.id === contestId) {
-          return;
-        }
+      fetchContestById: async (contestId: number, forceRefresh: boolean = false) => {
+        const requestSequence = ++contestRequestSequence;
+        if (!forceRefresh) {
+          const cachedContest = get().contest;
+          if (cachedContest && cachedContest.id === contestId) {
+            set({ contestError: null, isLoadingContest: false });
+            return;
+          }
 
-        const cachedInAll = get().allContests.find(c => c.id === contestId);
-        if (cachedInAll) {
-          set({ contest: cachedInAll });
-          return;
+          const cachedInAll = get().allContests.find(c => c.id === contestId);
+          if (cachedInAll) {
+            set({ contest: cachedInAll, contestError: null, isLoadingContest: false });
+            return;
+          }
         }
 
         set({ isLoadingContest: true });
         try {
-          const { data } = await api.get(`/api/contest/get/${contestId}/`);
+          const { data } = await api.get(`/api/contest/get/${contestId}/`, { timeout: 20000 });
+          if (requestSequence !== contestRequestSequence) return;
           set({
             contest: data.Contest,
+            allContests: get().allContests.map((cachedContest) =>
+              cachedContest.id === data.Contest.id ? data.Contest : cachedContest
+            ),
           });
           set({ contestError: null });
         } catch (contestError) {
-          set({ contestError: "Error fetching contest: " + contestError });
+          if (requestSequence === contestRequestSequence) {
+            set({ contestError: "Error fetching contest: " + contestError });
+          }
           throw Error("Error fetching contest: " + contestError);
         } finally {
-          set({ isLoadingContest: false });
+          if (requestSequence === contestRequestSequence) {
+            set({ isLoadingContest: false });
+          }
         }
       },
 
