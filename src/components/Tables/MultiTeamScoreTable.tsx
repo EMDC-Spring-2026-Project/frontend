@@ -101,6 +101,12 @@ export default function MultiTeamScoreSheet({
   const multipleScoreSheets = useScoreSheetStore(
     (state) => state.multipleScoreSheets
   );
+  const isLoadingScoreSheet = useScoreSheetStore(
+    (state) => state.isLoadingScoreSheet
+  );
+  const scoreSheetError = useScoreSheetStore(
+    (state) => state.scoreSheetError
+  );
   const fetchMultipleScoreSheets = useScoreSheetStore(
     (state) => state.fetchMultipleScoreSheets
   );
@@ -120,11 +126,6 @@ export default function MultiTeamScoreSheet({
   const teamIds = useMemo(() => teams.map((team) => team.id), [teams]);
   const teamIdsRef = useRef<number[]>([]);
 
-  // Update ref when teamIds change
-  useEffect(() => {
-    teamIdsRef.current = teamIds;
-  }, [teamIds]);
-
   // Filter teams that have score sheets available
   const filteredTeams = useMemo(() => {
     if (!multipleScoreSheets) return [];
@@ -142,7 +143,10 @@ export default function MultiTeamScoreSheet({
         currentTeamIds.some((id, idx) => id !== teamIds[idx]);
 
       if (teamIdsChanged || currentTeamIds.length === 0) {
-        fetchMultipleScoreSheets(teamIds, judgeId, sheetType);
+        teamIdsRef.current = teamIds;
+        fetchMultipleScoreSheets(teamIds, judgeId, sheetType).catch(() => {
+          // The store displays the actionable load error to the judge.
+        });
       }
     }
   }, [teamIds, judgeId, fetchMultipleScoreSheets, sheetType]);
@@ -348,15 +352,20 @@ export default function MultiTeamScoreSheet({
       }
     }
 
-    if (updatedSheets.length > 0) {
-      await submitMultipleScoreSheets(updatedSheets);
+    try {
+      if (updatedSheets.length > 0) {
+        await submitMultipleScoreSheets(updatedSheets);
 
-      if (judgeId) {
-        fetchScoreSheetsByJudge(judgeId).catch(() => {});
+        if (judgeId) {
+          fetchScoreSheetsByJudge(judgeId).catch(() => {});
+        }
       }
+      setOpenAreYouSure(false);
+      navigate(-1);
+    } catch (error) {
+      console.error("Unable to submit all team scoresheets:", error);
+      setOpenAreYouSure(false);
     }
-    setOpenAreYouSure(false);
-    navigate(-1);
   }, [
     multipleScoreSheets,
     filteredTeams,
@@ -368,6 +377,45 @@ export default function MultiTeamScoreSheet({
     fetchScoreSheetsByJudge,
     navigate,
   ]);
+
+  if (isLoadingScoreSheet && !multipleScoreSheets) {
+    return (
+      <Container maxWidth="lg" sx={{ mt: 4 }}>
+        <Box sx={{ textAlign: "center", py: 4 }}>
+          <Typography variant="h6" color="text.secondary">
+            Loading team scoresheets...
+          </Typography>
+        </Box>
+      </Container>
+    );
+  }
+
+  if (scoreSheetError && !multipleScoreSheets) {
+    return (
+      <Container maxWidth="lg" sx={{ mt: 4 }}>
+        <Box sx={{ textAlign: "center", py: 4 }}>
+          <Typography variant="h6" color="error" sx={{ mb: 1 }}>
+            Team scoresheets could not be loaded.
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            No scores have been changed. Check the connection and try again.
+          </Typography>
+          <Button
+            variant="contained"
+            onClick={() => {
+              teamIdsRef.current = [];
+              fetchMultipleScoreSheets(teamIds, judgeId!, sheetType).catch(() => {
+                // The store keeps the error visible if retrying also fails.
+              });
+            }}
+            disabled={!judgeId || teamIds.length === 0}
+          >
+            Try again
+          </Button>
+        </Box>
+      </Container>
+    );
+  }
 
   if (multipleScoreSheets && multipleScoreSheets.length === 0) {
     return (

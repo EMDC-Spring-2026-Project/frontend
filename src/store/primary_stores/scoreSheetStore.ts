@@ -363,13 +363,25 @@ export const useScoreSheetStore = create<ScoreSheetState>()(
           const results = await Promise.all(sheetsPromises);
           
           const validSheets = results.filter((sheet): sheet is ScoreSheet => sheet !== null);
+          if (validSheets.length !== teamIds.length) {
+            throw new Error(
+              `Loaded ${validSheets.length} of ${teamIds.length} scoresheets`
+            );
+          }
           set({ 
             multipleScoreSheets: validSheets,
             scoreSheetError: null 
           });
         } catch (error) {
-          set({ scoreSheetError: "Failed to fetch multiple score sheets" });
+          set({
+            multipleScoreSheets: null,
+            scoreSheetError: "Failed to fetch all team score sheets",
+          });
+          toast.error(
+            "Some team scoresheets could not be loaded. Please refresh and try again."
+          );
           console.error("Failed to fetch multiple score sheets:", error);
+          throw error;
         } finally {
           set({ isLoadingScoreSheet: false });
         }
@@ -453,9 +465,13 @@ export const useScoreSheetStore = create<ScoreSheetState>()(
           // Show success toast for multiple submissions
           toast.success(`${scoreSheets.length} scoresheets submitted successfully!`);
         } catch (error) {
+          if (currentSheets) {
+            set({ multipleScoreSheets: currentSheets });
+          }
           set({ scoreSheetError: "Failed to submit multiple score sheets" });
           toast.error("Failed to submit scoresheets. Please try again.");
           console.error("Failed to submit multiple score sheets:", error);
+          throw error;
         } finally {
           set({ isLoadingScoreSheet: false });
         }
@@ -481,7 +497,14 @@ export const useScoreSheetStore = create<ScoreSheetState>()(
           }
         } catch (error) {
           console.error("Failed to fetch multi-team penalties:", error);
-          set({ scoreSheetError: "Failed to load penalty sheets" });
+          set({
+            multipleScoreSheets: null,
+            scoreSheetError: "Failed to load penalty sheets",
+          });
+          toast.error(
+            "Penalty scoresheets could not be loaded. Please try again."
+          );
+          throw error;
         } finally {
           set({ isLoadingScoreSheet: false });
         }

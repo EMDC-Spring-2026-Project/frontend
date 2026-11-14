@@ -59,6 +59,7 @@ export default function MultiTeamPenaltyTable({
   title,
   penalties,
   judgeId,
+  contestId,
 }: IMultiTeamPenaltyTableProps) {
   const muiTheme = useMuiTheme();
   const isMobile = useMediaQuery(muiTheme.breakpoints.down("sm"));
@@ -73,7 +74,9 @@ export default function MultiTeamPenaltyTable({
     multipleScoreSheets,
     updateMultipleScores,
     submitMultipleScoreSheets,
+    fetchMultiTeamPenalties,
     isLoadingScoreSheet,
+    scoreSheetError,
   } = useScoreSheetStore();
 
   // Mapping store to refresh judge dashboard after updates
@@ -311,15 +314,17 @@ export default function MultiTeamPenaltyTable({
     });
 
     if (updatedSheets.length > 0) {
-      // Navigate immediately to avoid showing loading state
-      setOpenAreYouSure(false);
-      navigate(-1);
+      try {
+        await submitMultipleScoreSheets(updatedSheets);
 
-      // Submit in background
-      await submitMultipleScoreSheets(updatedSheets);
-
-      if (judgeId) {
-        fetchScoreSheetsByJudge(judgeId).catch(() => {});
+        if (judgeId) {
+          fetchScoreSheetsByJudge(judgeId).catch(() => {});
+        }
+        setOpenAreYouSure(false);
+        navigate(-1);
+      } catch (error) {
+        console.error("Unable to submit all team penalty sheets:", error);
+        setOpenAreYouSure(false);
       }
     } else {
       setOpenAreYouSure(false);
@@ -382,6 +387,33 @@ export default function MultiTeamPenaltyTable({
           <Typography variant="h6">Loading penalty sheets...</Typography>
         </Box>
       </>
+    );
+  }
+
+  if (scoreSheetError && !multipleScoreSheets) {
+    return (
+      <Container maxWidth="lg" sx={{ mt: 4 }}>
+        <Box sx={{ textAlign: "center", py: 4 }}>
+          <Typography variant="h6" color="error" sx={{ mb: 1 }}>
+            Penalty scoresheets could not be loaded.
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            No penalties have been changed. Check the connection and try again.
+          </Typography>
+          <Button
+            variant="contained"
+            onClick={() => {
+              if (!judgeId) return;
+              fetchMultiTeamPenalties(judgeId, contestId, sheetType).catch(() => {
+                // Keep the recovery message visible if retrying also fails.
+              });
+            }}
+            disabled={!judgeId}
+          >
+            Try again
+          </Button>
+        </Box>
+      </Container>
     );
   }
 

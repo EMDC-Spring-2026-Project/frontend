@@ -58,7 +58,9 @@ export default function RunPenaltiesMultiTeam() {
   // Fetch run penalties data for all teams assigned to the judge
   useEffect(() => {
     if (parsedJudgeId && contestId) {
-      fetchMultiTeamPenalties(parsedJudgeId, parseInt(contestId), 4);
+      fetchMultiTeamPenalties(parsedJudgeId, parseInt(contestId), 4).catch(() => {
+        // The scoring table displays the load failure and retry action.
+      });
     }
   }, [parsedJudgeId, contestId, fetchMultiTeamPenalties]);
 
