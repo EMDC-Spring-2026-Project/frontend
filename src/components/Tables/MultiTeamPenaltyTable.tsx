@@ -25,7 +25,8 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import theme from "../../theme";
 import { useNavigate } from "react-router-dom";
 import AreYouSureModal from "../Modals/AreYouSureModal";
-import { useScoreSheetStore } from "../../store/primary_stores/scoreSheetStore";
+import { bulkPenaltyKey, useScoreSheetStore } from "../../store/primary_stores/scoreSheetStore";
+import BulkScoreLoadError from "./BulkScoreLoadError";
 import { useMapScoreSheetStore } from "../../store/map_stores/mapScoreSheetStore"; // 👈 add this
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
@@ -71,13 +72,16 @@ export default function MultiTeamPenaltyTable({
 
   // Store wiring
   const {
-    multipleScoreSheets,
+    multipleScoreSheets: storedSheets,
     updateMultipleScores,
     submitMultipleScoreSheets,
     fetchMultiTeamPenalties,
-    isLoadingScoreSheet,
-    scoreSheetError,
+    bulkLoad,
   } = useScoreSheetStore();
+  const currentLoad = bulkLoad?.key === bulkPenaltyKey(judgeId ?? 0, contestId, sheetType)
+    ? bulkLoad : null;
+  const multipleScoreSheets = currentLoad?.state === "ready" ? storedSheets : null;
+  const loadedSheets = currentLoad?.sheets;
 
   // Mapping store to refresh judge dashboard after updates
   const { fetchScoreSheetsByJudge } = useMapScoreSheetStore();
@@ -170,14 +174,14 @@ export default function MultiTeamPenaltyTable({
 
   // Hydrate penaltyState from fetched sheets
   useEffect(() => {
-    if (multipleScoreSheets && multipleScoreSheets.length > 0) {
+    if (loadedSheets) {
       const newPenaltyState: {
         [teamId: number]: {
           [penaltyId: number]: number;
         };
       } = {};
 
-      multipleScoreSheets.forEach((sheet) => {
+      loadedSheets.forEach((sheet) => {
         if (!sheet || sheet.teamId === undefined) return;
 
         newPenaltyState[sheet.teamId] = {};
@@ -192,18 +196,9 @@ export default function MultiTeamPenaltyTable({
         });
       });
 
-      filteredTeams.forEach((team) => {
-        if (!newPenaltyState[team.id]) {
-          newPenaltyState[team.id] = {};
-          penalties.forEach((penalty) => {
-            newPenaltyState[team.id][penalty.id] = 0;
-          });
-        }
-      });
-
       setPenaltyState(newPenaltyState);
     }
-  }, [multipleScoreSheets, filteredTeams, penalties]);
+  }, [loadedSheets, penalties]);
 
   const handleCheckboxChange = (teamId: number, penaltyId: number) => {
     setPenaltyState((prev) => ({
@@ -343,7 +338,7 @@ export default function MultiTeamPenaltyTable({
     return grouped;
   }, [penalties]);
 
-  if (isLoadingScoreSheet) {
+  if (!currentLoad || currentLoad.state === "loading") {
     return (
       <>
         <Container
@@ -390,30 +385,14 @@ export default function MultiTeamPenaltyTable({
     );
   }
 
-  if (scoreSheetError && !multipleScoreSheets) {
+  if (currentLoad.state === "error") {
     return (
-      <Container maxWidth="lg" sx={{ mt: 4 }}>
-        <Box sx={{ textAlign: "center", py: 4 }}>
-          <Typography variant="h6" color="error" sx={{ mb: 1 }}>
-            Penalty scoresheets could not be loaded.
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            No penalties have been changed. Check the connection and try again.
-          </Typography>
-          <Button
-            variant="contained"
-            onClick={() => {
-              if (!judgeId) return;
-              fetchMultiTeamPenalties(judgeId, contestId, sheetType).catch(() => {
-                // Keep the recovery message visible if retrying also fails.
-              });
-            }}
-            disabled={!judgeId}
-          >
-            Try again
-          </Button>
-        </Box>
-      </Container>
+      <BulkScoreLoadError
+        message="Penalty scoresheets could not be loaded."
+        onRetry={() => {
+          if (judgeId) void fetchMultiTeamPenalties(judgeId, contestId, sheetType).catch(() => {});
+        }}
+      />
     );
   }
 

@@ -20,7 +20,6 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../store/primary_stores/authStore";
 import { useMapClusterJudgeStore } from "../store/map_stores/mapClusterToJudgeStore";
 import useClusterTeamStore from "../store/map_stores/mapClusterToTeamStore";
-import { useScoreSheetStore } from "../store/primary_stores/scoreSheetStore";
 
 // ==============================
 // API & Data
@@ -122,7 +121,6 @@ export default function MultiTeamMachineDesignScore() {
         ]);
         
         const allSheets = clusterResults.flat();
-        useScoreSheetStore.setState({ multipleScoreSheets: allSheets });
         const allTeams = teamResults.flat();
         
         const teamNameMap = new Map<number, string>();

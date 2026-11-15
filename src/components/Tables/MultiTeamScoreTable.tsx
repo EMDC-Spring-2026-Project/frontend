@@ -33,6 +33,7 @@ import {
   Typography,
   TextField,
   Button,
+  Alert,
 } from "@mui/material";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
@@ -47,7 +48,8 @@ import toast from "react-hot-toast";
 // ==============================
 // Store Hooks
 // ==============================
-import { useScoreSheetStore } from "../../store/primary_stores/scoreSheetStore";
+import { bulkScoreKey, useScoreSheetStore } from "../../store/primary_stores/scoreSheetStore";
+import BulkScoreLoadError from "./BulkScoreLoadError";
 import { useMapScoreSheetStore } from "../../store/map_stores/mapScoreSheetStore";
 
 // ==============================
@@ -98,15 +100,10 @@ export default function MultiTeamScoreSheet({
   }>({});
 
   // Score sheet store for data management - only subscribe to what we need
-  const multipleScoreSheets = useScoreSheetStore(
+  const storedSheets = useScoreSheetStore(
     (state) => state.multipleScoreSheets
   );
-  const isLoadingScoreSheet = useScoreSheetStore(
-    (state) => state.isLoadingScoreSheet
-  );
-  const scoreSheetError = useScoreSheetStore(
-    (state) => state.scoreSheetError
-  );
+  const bulkLoad = useScoreSheetStore((state) => state.bulkLoad);
   const fetchMultipleScoreSheets = useScoreSheetStore(
     (state) => state.fetchMultipleScoreSheets
   );
@@ -124,7 +121,9 @@ export default function MultiTeamScoreSheet({
 
   // Memoize team IDs to prevent unnecessary re-fetches
   const teamIds = useMemo(() => teams.map((team) => team.id), [teams]);
-  const teamIdsRef = useRef<number[]>([]);
+  const loadState = bulkLoad?.key === bulkScoreKey(teamIds, judgeId ?? 0, sheetType)
+    ? bulkLoad.state : undefined;
+  const multipleScoreSheets = loadState === "ready" ? storedSheets : null;
 
   // Filter teams that have score sheets available
   const filteredTeams = useMemo(() => {
@@ -135,21 +134,12 @@ export default function MultiTeamScoreSheet({
   }, [teams, multipleScoreSheets]);
 
   // Fetch score sheets when component mounts or when teamIds change
-  useEffect(() => {
+  const loadSheets = useCallback(() => {
     if (teamIds.length > 0 && judgeId) {
-      const currentTeamIds = teamIdsRef.current;
-      const teamIdsChanged =
-        currentTeamIds.length !== teamIds.length ||
-        currentTeamIds.some((id, idx) => id !== teamIds[idx]);
-
-      if (teamIdsChanged || currentTeamIds.length === 0) {
-        teamIdsRef.current = teamIds;
-        fetchMultipleScoreSheets(teamIds, judgeId, sheetType).catch(() => {
-          // The store displays the actionable load error to the judge.
-        });
-      }
+      void fetchMultipleScoreSheets(teamIds, judgeId, sheetType).catch(() => {});
     }
   }, [teamIds, judgeId, fetchMultipleScoreSheets, sheetType]);
+  useEffect(loadSheets, [loadSheets]);
 
   // Memoize sheet IDs string for comparison to prevent unnecessary formData updates
   const sheetIdsString = useMemo(() => {
@@ -378,7 +368,7 @@ export default function MultiTeamScoreSheet({
     navigate,
   ]);
 
-  if (isLoadingScoreSheet && !multipleScoreSheets) {
+  if (teamIds.length > 0 && (!loadState || loadState === "loading")) {
     return (
       <Container maxWidth="lg" sx={{ mt: 4 }}>
         <Box sx={{ textAlign: "center", py: 4 }}>
@@ -390,31 +380,8 @@ export default function MultiTeamScoreSheet({
     );
   }
 
-  if (scoreSheetError && !multipleScoreSheets) {
-    return (
-      <Container maxWidth="lg" sx={{ mt: 4 }}>
-        <Box sx={{ textAlign: "center", py: 4 }}>
-          <Typography variant="h6" color="error" sx={{ mb: 1 }}>
-            Team scoresheets could not be loaded.
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            No scores have been changed. Check the connection and try again.
-          </Typography>
-          <Button
-            variant="contained"
-            onClick={() => {
-              teamIdsRef.current = [];
-              fetchMultipleScoreSheets(teamIds, judgeId!, sheetType).catch(() => {
-                // The store keeps the error visible if retrying also fails.
-              });
-            }}
-            disabled={!judgeId || teamIds.length === 0}
-          >
-            Try again
-          </Button>
-        </Box>
-      </Container>
-    );
+  if (loadState === "error") {
+    return <BulkScoreLoadError message="Team scoresheets could not be loaded." onRetry={loadSheets} />;
   }
 
   if (multipleScoreSheets && multipleScoreSheets.length === 0) {
@@ -704,6 +671,11 @@ export default function MultiTeamScoreSheet({
         >
           Back to Judging Dashboard
         </Button>
+        {loadState === "ready" && filteredTeams.length < teams.length && (
+          <Alert severity="warning" sx={{ mt: 1 }}>
+            Some teams don’t have scoresheets. You can score the teams shown.
+          </Alert>
+        )}
       </Container>
 
       <Box
