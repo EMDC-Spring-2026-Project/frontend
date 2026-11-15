@@ -6,8 +6,8 @@ import MilitaryTechIcon from "@mui/icons-material/MilitaryTech";
 import { useParams } from "react-router-dom";
 import theme from "../../theme";
 import { useMapContestToTeamStore } from "../../store/map_stores/mapContestToTeamStore";
-import useContestJudgeStore from "../../store/map_stores/mapContestToJudgeStore";
 import { useContestStore } from "../../store/primary_stores/contestStore";
+import { api } from "../../lib/api";
 
 export default function ContestHighlightPage() {
   const { contestId } = useParams<{ contestId: string }>();
@@ -16,24 +16,34 @@ export default function ContestHighlightPage() {
   const { isLoadingContest } = useContestStore();
   const { teamsByContest, isLoadingMapContestToTeam } = useMapContestToTeamStore();
   
-  // Use selector to get judges for this specific contest - this ensures reactivity
-  const contestJudges = useContestJudgeStore((state) => state.contestJudges);
-  const getAllJudgesByContestId = useContestJudgeStore((state) => state.getAllJudgesByContestId);
-  const isLoadingMapContestJudge = useContestJudgeStore((state) => state.isLoadingMapContestJudge);
-
-  // Get judges for this specific contest
-  const judgesForContest = contestIdNumber ? (contestJudges[contestIdNumber] || []) : [];
-
   const [totalTeams, setTotalTeams] = useState<number>(0);
-  const [totalJudges, setTotalJudges] = useState<number>(0);
+  const [totalJudges, setTotalJudges] = useState<number | null>(null);
+  const [isLoadingJudgeCount, setIsLoadingJudgeCount] = useState(false);
   const [mostPointsTeam, setMostPointsTeam] = useState<string>("N/A");
 
-  // Fetch judges for the contest when contestId is available - force refresh to get latest data
+  // Request only an aggregate count for this public page, never judge details.
   useEffect(() => {
-    if (contestIdNumber) {
-      getAllJudgesByContestId(contestIdNumber, true); // Force refresh to get latest count
-    }
-  }, [contestIdNumber, getAllJudgesByContestId]);
+    if (!contestIdNumber) return;
+    let isActive = true;
+    setIsLoadingJudgeCount(true);
+
+    api
+      .get(`/api/mapping/judgeToContest/getPublicJudgeCount/${contestIdNumber}/`)
+      .then((response) => {
+        if (isActive) setTotalJudges(response.data.judge_count);
+      })
+      .catch((error) => {
+        console.error("Failed to load contest judge count:", error);
+        if (isActive) setTotalJudges(null);
+      })
+      .finally(() => {
+        if (isActive) setIsLoadingJudgeCount(false);
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [contestIdNumber]);
 
   // Count total teams
   useEffect(() => {
@@ -50,20 +60,7 @@ export default function ContestHighlightPage() {
     }
   }, [teamsByContest]);
 
-  // Count total judges - deduplicate by judge ID to ensure accurate count
-  useEffect(() => {
-    if (judgesForContest && judgesForContest.length > 0) {
-      // Deduplicate judges by ID in case of duplicates
-      const uniqueJudges = Array.from(
-        new Map(judgesForContest.map(judge => [judge.id, judge])).values()
-      );
-      setTotalJudges(uniqueJudges.length);
-    } else {
-      setTotalJudges(0);
-    }
-  }, [judgesForContest]);
-
-  if (isLoadingContest || isLoadingMapContestToTeam || isLoadingMapContestJudge) {
+  if (isLoadingContest || isLoadingMapContestToTeam) {
     return (
       <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", height: "40vh" }}>
         <CircularProgress />
@@ -82,7 +79,7 @@ export default function ContestHighlightPage() {
     {
       id: 2,
       title: "Number of Judges",
-      value: totalJudges,
+      value: isLoadingJudgeCount ? "Loading…" : totalJudges ?? "—",
       iconBg: theme.palette.warning.light + "55",
       icon: <GavelIcon sx={{ fontSize: 40, color: theme.palette.warning.dark, mb: 1 }} />,
     },

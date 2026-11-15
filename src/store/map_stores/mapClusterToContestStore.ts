@@ -8,7 +8,7 @@ interface MapClusterContestState {
   contestClusters: {[contestId: number]: Cluster[]};
   isLoadingMapClusterContest: boolean;
   mapClusterContestError: string | null;
-  fetchClustersByContestId: (contestId: number) => Promise<void>;
+  fetchClustersByContestId: (contestId: number, forceRefresh?: boolean) => Promise<void>;
   addClusterToContest: (contestId: number, cluster: Cluster) => void;
   updateClusterInContest: (contestId: number, updatedCluster: Cluster) => void;
   removeClusterFromContest: (contestId: number, clusterId: number) => void;
@@ -37,18 +37,19 @@ export const useMapClusterToContestStore = create<MapClusterContestState>()(
         }
       },
 
-      fetchClustersByContestId: async (contestId: number) => {
+      fetchClustersByContestId: async (contestId: number, forceRefresh = false) => {
         // Check cache first - if we already have clusters for this contest, return early
         const cachedClusters = get().contestClusters[contestId];
-        if (cachedClusters && cachedClusters.length > 0) {
-          set({ clusters: cachedClusters });
+        if (!forceRefresh && cachedClusters && cachedClusters.length > 0) {
+          set({ clusters: cachedClusters, mapClusterContestError: null });
           return cachedClusters; // Use cached data
         }
         
         set({ isLoadingMapClusterContest: true });
         try {
           const response = await api.get(
-            `/api/mapping/clusterToContest/getAllClustersByContest/${contestId}/`
+            `/api/mapping/clusterToContest/getAllClustersByContest/${contestId}/`,
+            { timeout: 20000 }
           );
           // Ensure cluster_type is present and normalized
           const clusters = (response.data.Clusters || []).map((c: any) => ({

@@ -7,7 +7,7 @@
 // ==============================
 // React Core
 // ==============================
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 // ==============================
 // Router
@@ -18,7 +18,7 @@ import { useNavigate, Link } from "react-router-dom";
 // UI Libraries & Theme
 // ==============================
 import Typography from "@mui/material/Typography";
-import { Container, Stack, Button, Box } from "@mui/material";
+import { Alert, Container, Stack, Button, Box } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import theme from "../theme";
 import toast from "react-hot-toast";
@@ -38,6 +38,8 @@ export default function Contests() {
   // Store State & Actions
   // ------------------------------
   const { allContests, fetchAllContests, isLoadingContest } = useContestStore();
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
 
   // ------------------------------
   // Navigation
@@ -50,8 +52,29 @@ export default function Contests() {
 
   // Fetch all contests on component mount
   useEffect(() => {
-    fetchAllContests();
-  }, [fetchAllContests]);
+    let active = true;
+    let inFlight = false;
+    const refresh = async () => {
+      if (document.visibilityState !== "visible" || inFlight) return;
+      inFlight = true;
+      try {
+        await fetchAllContests(true);
+        if (active) setLoadFailed(false);
+      } catch {
+        if (active) setLoadFailed(true);
+      } finally {
+        inFlight = false;
+      }
+    };
+    void refresh();
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      active = false;
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [fetchAllContests, retryCount]);
 
   // function to create data row
   function createData(
@@ -59,14 +82,17 @@ export default function Contests() {
     name: string,
     date: string,
     is_open: boolean,
-    is_tabulated?: boolean
+    is_tabulated?: boolean,
+    results_published?: boolean,
   ) {
     let status = "";
 
     if (is_open) {
       status = "In Progress";
-    } else if (is_tabulated) {
+    } else if (results_published) {
       status = "Finalized";
+    } else if (is_tabulated) {
+      status = "Awaiting Release";
     } else {
       status = "Not Started";
     }
@@ -78,11 +104,11 @@ export default function Contests() {
   // Navigate to specific contest results
   const handleRowClick = (contestId: number) => {
     const contest = allContests.find((c: any) => c.id === contestId);
-    if (contest && contest.is_open == false && contest.is_tabulated == true) {
+    if (contest?.results_published === true) {
       navigate(`/contestresults/${contestId}`);
     } else {
       toast.success(
-        "🎉 Stay tuned! Results will be available once the contest ends and scores are finalized!",
+        "Stay tuned! Results will be available after the official announcement.",
         {
           id: "contest-results-stay-tuned",
           duration: 4000,
@@ -106,12 +132,12 @@ export default function Contests() {
 
   // transforms array into rows
   const rows = allContests
-    .map((contest: { id: number; name: string; date: string; is_open: boolean; is_tabulated: boolean }) =>
-      createData(contest.id, contest.name, contest.date, contest.is_open, contest.is_tabulated)
+    .map((contest: { id: number; name: string; date: string; is_open: boolean; is_tabulated: boolean; results_published: boolean }) =>
+      createData(contest.id, contest.name, contest.date, contest.is_open, contest.is_tabulated, contest.results_published)
     )
     .filter((row: { status: string }) => row.status !== "Not Started")
     .sort((a: { status: string }, b: { status: string }) => {
-      const order = { Finalized: 1, "In Progress": 2, "Not Started": 3 };
+      const order = { Finalized: 1, "Awaiting Release": 2, "In Progress": 3, "Not Started": 4 };
       return order[a.status as keyof typeof order] - order[b.status as keyof typeof order];
     });
 
@@ -187,6 +213,15 @@ export default function Contests() {
           p: 3,
         }}
       >
+        {loadFailed && (
+          <Alert severity="warning" sx={{ mb: 2 }} action={
+            <Button color="inherit" disabled={isLoadingContest} onClick={() => setRetryCount((count) => count + 1)}>
+              Retry
+            </Button>
+          }>
+            Unable to refresh contests. Any contests shown may be out of date. Please try again.
+          </Alert>
+        )}
         <ContestTable
           rows={rows}
           isLoading={isLoadingContest}

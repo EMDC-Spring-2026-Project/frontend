@@ -1,7 +1,7 @@
 // ==============================
 // Component: OrganizerTeamsTable
 // Hierarchical table for managing teams organized by clusters.
-// Features expandable cluster rows, team management, and disqualification controls.
+// Features expandable cluster rows and team management.
 // ==============================
 
 // ==============================
@@ -46,7 +46,6 @@ import { Cluster, TeamData } from "../../types";
 import ClusterModal from "../Modals/ClusterModal";
 import TeamModal from "../Modals/TeamModal";
 import Modal from "../Modals/Modal";
-import DisqualificationModal from "../Modals/DisqualificationModal";
 import DeleteTeamDialog from "../Modals/DeleteTeamDialog";
 
 // ==============================
@@ -71,13 +70,8 @@ function OrganizerTeamsTable(props: IOrganizerTeamsTableProps) {
   );
   const [clusterData, setClusterData] = useState<Cluster | undefined>(undefined);
   const [teamData, setTeamData] = useState<TeamData | undefined>(undefined);
-  const [openDisqualificationModal, setOpenDisqualificationModal] =
-    useState(false);
   const [openDeleteConfirmModal, setOpenDeleteConfirmModal] = useState(false);
   const [clusterToDelete, setClusterToDelete] = useState<number | null>(null);
-  const [currentTeamName, setCurrentTeamName] = useState("");
-  const [currentTeamId, setCurrentTeamId] = useState(0);
-  const [currentTeamClusterId, setCurrentTeamClusterId] = useState(0);
 
   // ------------------------------
   // Store State & Actions
@@ -243,17 +237,6 @@ function OrganizerTeamsTable(props: IOrganizerTeamsTableProps) {
     });
   }, [clusterIdsString, fetchTeamsByClusterId]);
 
-  const handleOpenAreYouSure = (
-    teamName: string,
-    teamId: number,
-    clusterId: number
-  ) => {
-    setOpenDisqualificationModal(true);
-    setCurrentTeamName(teamName);
-    setCurrentTeamId(teamId);
-    setCurrentTeamClusterId(clusterId);
-  };
-
   function TeamTable({
     teams,
     cluster,
@@ -285,39 +268,7 @@ function OrganizerTeamsTable(props: IOrganizerTeamsTableProps) {
                   </Typography>
                 )}
               </TableCell>
-              {team.judge_disqualified && !team.organizer_disqualified && (
-                <TableCell>
-                  <Button
-                    variant="contained"
-                    onClick={() =>
-                      handleOpenAreYouSure(team.team_name, team.id, cluster)
-                    }
-                    sx={{
-                      textTransform: "none",
-                      fontWeight: 600,
-                      px: { xs: 1.5, sm: 2, md: 2.25 },
-                      py: { xs: 0.4, sm: 0.6, md: 0.75 },
-                      borderRadius: 2,
-                      fontSize: { xs: "0.65rem", sm: "0.7rem", md: "0.8rem" },
-                      minWidth: { xs: "80px", sm: "100px", md: "120px" },
-                      height: { xs: "28px", sm: "32px", md: "36px" },
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      backgroundColor: "#d32f2f",
-                      "&:hover": {
-                        backgroundColor: "#c62828",
-                        transform: "translateY(-1px)",
-                        boxShadow: "0 4px 8px rgba(211,47,47,0.25)",
-                      },
-                      transition: "all 0.2s ease-in-out",
-                    }}
-                  >
-                    Disqualify Team
-                  </Button>
-                </TableCell>
-              )}
-              {team.judge_disqualified && team.organizer_disqualified && (
+              {team.judge_disqualified && (
                 <TableCell sx={{ color: "red" }}>Disqualified</TableCell>
               )}
               <TableCell align="center">
@@ -549,13 +500,6 @@ function OrganizerTeamsTable(props: IOrganizerTeamsTableProps) {
         teamData={teamData}
         clusters={clusters}
         contestId={contestId}
-      />
-      <DisqualificationModal
-        open={openDisqualificationModal}
-        handleClose={() => setOpenDisqualificationModal(false)}
-        teamName={currentTeamName}
-        teamId={currentTeamId}
-        clusterId={currentTeamClusterId}
       />
       {selectedTeam && (
         <DeleteTeamDialog

@@ -17,7 +17,7 @@ export default function CoachTeamScoresTable(props: ICoachTeamScoresTable) {
   const navigate = useNavigate();
   
   // Hide scores if contest is open or not tabulated
-  const shouldHideScores = Boolean(contest && (contest.is_open === true || contest.is_tabulated === false));
+  const shouldHideScores = Boolean(contest && contest.results_published !== true);
   
   // Check if team has championship or redesign scores
   const hasChampionshipScores = Boolean(

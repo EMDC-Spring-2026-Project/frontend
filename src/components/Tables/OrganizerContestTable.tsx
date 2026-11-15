@@ -14,6 +14,8 @@ import AreYouSureModal from "../Modals/AreYouSureModal";
 import useMapScoreSheetStore from "../../store/map_stores/mapScoreSheetStore";
 import theme from "../../theme";
 import { useTabulateStore } from "../../store/primary_stores/tabluateStore";
+import { api } from "../../lib/api";
+import toast from "react-hot-toast";
 
 interface IOrganizerContestTableProps {
   type: "past" | "current" | string;
@@ -50,6 +52,7 @@ export default function OrganizerContestTable(
   const [startAreYouSure, setStartAreYouSure] = useState(false);
   const [endAreYouSure, setEndAreYouSure] = useState(false);
   const [reopenAreYouSure, setReopenAreYouSure] = useState(false);
+  const [publishAreYouSure, setPublishAreYouSure] = useState(false);
 
   const [selectedContest, setSelectedContest] = useState<any>(null);
 
@@ -132,6 +135,7 @@ export default function OrganizerContestTable(
           date: selectedContest.date,
           is_open: true,
           is_tabulated: false,
+          results_published: false,
         };
         await editContest(editedContest);
         setStartAreYouSure(false);
@@ -143,6 +147,7 @@ export default function OrganizerContestTable(
           date: selectedContest.date,
           is_open: false,
           is_tabulated: true,
+          results_published: selectedContest.results_published ?? false,
         };
         try {
           await tabulateContest(selectedContest.id);
@@ -158,6 +163,7 @@ export default function OrganizerContestTable(
           date: selectedContest.date,
           is_open: true,
           is_tabulated: false,
+          results_published: false,
         };
         await editContest(editedContest);
         setReopenAreYouSure(false);
@@ -168,6 +174,21 @@ export default function OrganizerContestTable(
 
     if (organizerId) {
       await fetchContestsByOrganizerId(organizerId);
+    }
+  };
+
+  const handlePublishResults = async () => {
+    if (!selectedContest) return;
+    const published = !selectedContest.results_published;
+    try {
+      await api.post(`/api/contest/${selectedContest.id}/publish-results/`, { published });
+      toast.success(published ? "Results published to the public." : "Results hidden from the public.");
+      clearContests();
+      if (organizerId) await fetchContestsByOrganizerId(organizerId);
+    } catch (error: any) {
+      toast.error(error?.response?.data?.detail || "Unable to change result publication.");
+    } finally {
+      setPublishAreYouSure(false);
     }
   };
 
@@ -245,16 +266,28 @@ if (type === "current" && contests) {
           >
             Reopen Contest
           </Link>,
-          <Link
-            component="button"
-            onClick={() => {
-              sessionStorage.setItem("fromRankings", "true");
-              navigate(`/results/${contest.id}/`);
-            }}
-            sx={{ textDecoration: "none" }}
-          >
-            View Results
-          </Link>
+          <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
+            <Link
+              component="button"
+              onClick={() => {
+                sessionStorage.setItem("fromRankings", "true");
+                navigate(`/results/${contest.id}/`);
+              }}
+              sx={{ textDecoration: "none" }}
+            >
+              View Results
+            </Link>
+            <Link
+              component="button"
+              onClick={() => {
+                setSelectedContest(contest);
+                setPublishAreYouSure(true);
+              }}
+              sx={{ textDecoration: "none", fontWeight: 700 }}
+            >
+              {contest.results_published ? "Unpublish" : "Publish Results"}
+            </Link>
+          </Box>
         );
       });
   }
@@ -382,6 +415,15 @@ if (type === "current" && contests) {
           handleSubmit={() => handleEditContest(ContestAction.Open)}
           title="Are you sure you want to start the contest?"
     
+        />
+
+        <AreYouSureModal
+          open={publishAreYouSure}
+          handleClose={() => setPublishAreYouSure(false)}
+          handleSubmit={handlePublishResults}
+          title={selectedContest?.results_published
+            ? "Hide these results from the public?"
+            : "Publish these results to the public now?"}
         />
 
         {/* Modal for ending contest */}

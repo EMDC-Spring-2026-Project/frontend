@@ -1,48 +1,48 @@
 import { Route, Routes, useLocation } from "react-router-dom";
-import { useEffect, useState } from "react";
-
-import Home from "./pages/Home";
-import ForgotPassword from "./pages/ForgotPassword";
-import Judging from "./pages/Judging";
-import Login from "./pages/Login";
-import Organizer from "./pages/Organizer";
-import SetPassword from "./pages/SetPassword";
-import ManageContest from "./pages/ManageContest";
-import Coach from "./pages/Coach";
-import JournalScore from "./pages/JournalScore";
-import PresentationScore from "./pages/PresentationScore";
-import MachineDesignScore from "./pages/MachineDesignScore";
-import Admin from "./pages/Admin";
-import InternalResults from "./pages/InternalResults";
-import GeneralPenalties from "./pages/GeneralPenalties";
-import ScoreBreakdown from "./pages/ScoreBreakdown";
-import RunPenalties from "./pages/RunPenalties";
-
-import AdminSpecialAwardsPage from "./pages/AdminSpecialAwards";
-import OrganizerSpecialAwards from "./pages/OrganizerSpecialAwards";
-import JudgeSpecialAwards from "./pages/JudgeSpecialAwards";
-import RedesignScore from "./pages/RedesignScore";
-import MultiTeamPresentationScore from "./pages/PresentationMultiTeamScore";
-import MultiTeamJournalScore from "./pages/JournalMultiTeamScore";
-import MultiTeamMachineDesignScore from "./pages/MachineDesignMultiTeamScore";
-import ChampionshipScore from "./pages/ChampionshipScore";
-import GeneralPenaltiesMultiTeam from "./pages/GeneralPenaltiesMultiTeam";
-import RunPenaltiesMultiTeam from "./pages/RunPenaltiesMultiTeam";
-import ChampionshipScoreBreakdown from "./pages/ChampionshipScoreBreakdown";
-import RedesignScoreBreakdown from "./pages/RedesignScoreBreakdown";
-import ContestScores from "./pages/ContestScores";
-import ContestPage from "./pages/ContestsPage";
-import Logout from "./pages/Logout";
+import { lazy, Suspense, useEffect, useState } from "react";
 
 import Navbar from "./components/Navbar";
 import Preloader from "./components/Preloader";
-import Ranking from "./components/Tables/Rankings";
-
 import { ThemeProvider } from "@mui/material/styles";
 import theme from "./theme";
 import { Toaster } from "react-hot-toast";
 
 import { useAuthStore } from "./store/primary_stores/authStore";
+
+// Keep the entry bundle focused on app chrome; route code and its page-specific
+// dependencies are downloaded only when a visitor opens that page.
+const Home = lazy(() => import("./pages/Home"));
+const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
+const Judging = lazy(() => import("./pages/Judging"));
+const Login = lazy(() => import("./pages/Login"));
+const Organizer = lazy(() => import("./pages/Organizer"));
+const SetPassword = lazy(() => import("./pages/SetPassword"));
+const ManageContest = lazy(() => import("./pages/ManageContest"));
+const Coach = lazy(() => import("./pages/Coach"));
+const JournalScore = lazy(() => import("./pages/JournalScore"));
+const PresentationScore = lazy(() => import("./pages/PresentationScore"));
+const MachineDesignScore = lazy(() => import("./pages/MachineDesignScore"));
+const Admin = lazy(() => import("./pages/Admin"));
+const InternalResults = lazy(() => import("./pages/InternalResults"));
+const GeneralPenalties = lazy(() => import("./pages/GeneralPenalties"));
+const ScoreBreakdown = lazy(() => import("./pages/ScoreBreakdown"));
+const RunPenalties = lazy(() => import("./pages/RunPenalties"));
+const AdminSpecialAwardsPage = lazy(() => import("./pages/AdminSpecialAwards"));
+const OrganizerSpecialAwards = lazy(() => import("./pages/OrganizerSpecialAwards"));
+const JudgeSpecialAwards = lazy(() => import("./pages/JudgeSpecialAwards"));
+const RedesignScore = lazy(() => import("./pages/RedesignScore"));
+const MultiTeamPresentationScore = lazy(() => import("./pages/PresentationMultiTeamScore"));
+const MultiTeamJournalScore = lazy(() => import("./pages/JournalMultiTeamScore"));
+const MultiTeamMachineDesignScore = lazy(() => import("./pages/MachineDesignMultiTeamScore"));
+const ChampionshipScore = lazy(() => import("./pages/ChampionshipScore"));
+const GeneralPenaltiesMultiTeam = lazy(() => import("./pages/GeneralPenaltiesMultiTeam"));
+const RunPenaltiesMultiTeam = lazy(() => import("./pages/RunPenaltiesMultiTeam"));
+const ChampionshipScoreBreakdown = lazy(() => import("./pages/ChampionshipScoreBreakdown"));
+const RedesignScoreBreakdown = lazy(() => import("./pages/RedesignScoreBreakdown"));
+const ContestScores = lazy(() => import("./pages/ContestScores"));
+const ContestPage = lazy(() => import("./pages/ContestsPage"));
+const Logout = lazy(() => import("./pages/Logout"));
+const Ranking = lazy(() => import("./components/Tables/Rankings"));
 
 function App() {
   const location = useLocation();
@@ -86,6 +86,7 @@ function App() {
           currentLink !== "/login/" &&
           currentLink !== "/signup/" && <Navbar />}
 
+        <Suspense fallback={<Preloader show={true} />}>
         <Routes>
           {/* Public */}
           <Route path="/" element={<Home />} />
@@ -238,13 +239,8 @@ function App() {
             />
           )}
 
-          {isAuthenticated && (
-            <Route
-              path="/score-breakdown/:teamId"
-              element={<ScoreBreakdown />}
-            />
-          )}
         </Routes>
+        </Suspense>
 
         <Toaster
           position="top-center"

@@ -36,8 +36,8 @@ export default function ContestOverviewTable({ contests: propContests }: Contest
   const organizerContests = useMapContestOrganizerStore((s) => s.contests);
   const fetchContestsByOrganizerId = useMapContestOrganizerStore((s) => s.fetchContestsByOrganizerId);
 
-  const judgeContest = useMapContestJudgeStore((s) => s.contest);
-  const getContestByJudgeId = useMapContestJudgeStore((s) => s.getContestByJudgeId);
+  const judgeContests = useMapContestJudgeStore((s) => s.judgeContests);
+  const getContestsByJudgeId = useMapContestJudgeStore((s) => s.getContestsByJudgeId);
   const fetchJudgesForMultipleContests = useMapContestJudgeStore((s) => s.fetchJudgesForMultipleContests);
   const contestJudges = useMapContestJudgeStore((s) => s.contestJudges);
 
@@ -66,11 +66,11 @@ export default function ContestOverviewTable({ contests: propContests }: Contest
   const contests = useMemo(() => {
     const sourceContests = propContests || (
       role?.user_type === 2 ? organizerContests : 
-      role?.user_type === 3 ? (judgeContest ? [judgeContest] : []) : 
+      role?.user_type === 3 ? judgeContests :
       allContests
     );
     return sourceContests.filter(contest => !(contest.is_open === false && contest.is_tabulated === true));
-  }, [propContests, role?.user_type, organizerContests, judgeContest, allContests]);
+  }, [propContests, role?.user_type, organizerContests, judgeContests, allContests]);
 
   /**
    * Loads contest data based on user role.
@@ -88,7 +88,7 @@ export default function ContestOverviewTable({ contests: propContests }: Contest
         if (role.user_type === 2 && role.user?.id) {
           await fetchContestsByOrganizerId(role.user.id);
         } else if (role.user_type === 3 && role.user?.id) {
-          await getContestByJudgeId(role.user.id);
+          await getContestsByJudgeId(role.user.id);
         } else {
           await fetchAllContests();
         }
@@ -106,7 +106,7 @@ export default function ContestOverviewTable({ contests: propContests }: Contest
     role?.user?.id,
     fetchAllContests,
     fetchContestsByOrganizerId,
-    getContestByJudgeId,
+    getContestsByJudgeId,
     propContests, //effect re-evaluates if parent supplies contests later
   ]);
 

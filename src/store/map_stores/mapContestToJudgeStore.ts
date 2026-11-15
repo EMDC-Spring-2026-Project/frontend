@@ -6,6 +6,7 @@ import { Contest, Judge, MapContestToJudge } from "../../types";
 interface MapContestJudgeState {
   judges: Judge[];
   contest: Contest | null;
+  judgeContests: Contest[];
   mappings: MapContestToJudge[];
   contestJudges: {[contestId: number]: Judge[]};
   isLoadingMapContestJudge: boolean;
@@ -18,6 +19,7 @@ interface MapContestJudgeState {
   removeJudgeFromContest: (judgeId: number, contestId: number) => Promise<void>;
   removeContestFromJudges: (contestId: number) => void;
   getContestByJudgeId: (judgeId: number, forceRefresh?: boolean) => Promise<void>;
+  getContestsByJudgeId: (judgeId: number) => Promise<void>;
   deleteContestJudgeMappingById: (mapId: number) => Promise<void>;
   clearJudges: () => void;
   clearContest: () => void;
@@ -36,6 +38,7 @@ export const useMapContestJudgeStore = create<MapContestJudgeState>()(
     (set, get) => ({
       judges: [],
       contest: null,
+      judgeContests: [],
       mappings: [],
       contestJudges: {},
       isLoadingMapContestJudge: false,
@@ -54,7 +57,7 @@ export const useMapContestJudgeStore = create<MapContestJudgeState>()(
 
       clearContest: async () => {
         try {
-          set({ contest: null });
+          set({ contest: null, judgeContests: [] });
           set({ mapContestJudgeError: null });
         } catch (error) {
           const errorMessage = "Error clearing out contest in state";
@@ -153,6 +156,29 @@ export const useMapContestJudgeStore = create<MapContestJudgeState>()(
           console.error('Error response:', error.response?.data);
           console.error('Error status:', error.response?.status);
           const errorMessage = error.response?.data?.error || error.response?.data?.message || error.message || "Error fetching contest by judge ID";
+          set({ mapContestJudgeError: errorMessage });
+          throw new Error(errorMessage);
+        } finally {
+          set({ isLoadingMapContestJudge: false });
+        }
+      },
+
+      getContestsByJudgeId: async (judgeId: number) => {
+        set({ isLoadingMapContestJudge: true });
+        try {
+          const response = await api.get(
+            `/api/mapping/contestToJudge/judge-contests/${judgeId}/`
+          );
+          const judgeContests: Contest[] = response.data?.contests || [];
+          set({
+            judgeContests,
+            // Keep the older single-contest field in sync for any existing consumers.
+            contest: judgeContests[0] || null,
+            mapContestJudgeError: null,
+          });
+        } catch (error: any) {
+          const errorMessage =
+            error.response?.data?.error || "Error fetching contests for judge";
           set({ mapContestJudgeError: errorMessage });
           throw new Error(errorMessage);
         } finally {
@@ -266,6 +292,9 @@ export const useMapContestJudgeStore = create<MapContestJudgeState>()(
         // Update the cached contest if it matches the updated contest
         set((state) => ({
           contest: state.contest && state.contest.id === updatedContest.id ? updatedContest : state.contest,
+          judgeContests: state.judgeContests.map((judgeContest) =>
+            judgeContest.id === updatedContest.id ? updatedContest : judgeContest
+          ),
         }));
       },
 
@@ -275,11 +304,17 @@ export const useMapContestJudgeStore = create<MapContestJudgeState>()(
           delete updatedContestJudges[contestId];
 
           // Clear current contest if it matches
-          const updatedContest = state.contest && state.contest.id === contestId ? null : state.contest;
+          const judgeContests = state.judgeContests.filter(
+            (judgeContest) => judgeContest.id !== contestId
+          );
+          const updatedContest = state.contest && state.contest.id === contestId
+            ? judgeContests[0] || null
+            : state.contest;
 
           return {
             contestJudges: updatedContestJudges,
             contest: updatedContest,
+            judgeContests,
           };
         });
       },
