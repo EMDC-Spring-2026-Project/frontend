@@ -117,7 +117,7 @@ export const useScoreSheetStore = create<ScoreSheetState>()(
       // Optimized submission method - no loading state for instant response
       submitScoreSheet: async (data: Partial<ScoreSheet>) => {
         try {
-          const response = await api.post(`/api/scoreSheet/edit/`, data);
+          const response = await api.post(`/api/scoreSheet/edit/`, data, { timeout: 20000 });
           
           set({ scoreSheet: response.data.edit_score_sheets });
           set({ scoreSheetError: null });
