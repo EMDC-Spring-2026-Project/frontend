@@ -20,7 +20,6 @@ import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import theme from "../../theme";
 import { useNavigate } from "react-router-dom";
-import { useMapScoreSheetStore } from "../../store/map_stores/mapScoreSheetStore";
 import { useScoreSheetStore } from "../../store/primary_stores/scoreSheetStore";
 import { useEffect, useState } from "react";
 import CircularProgress from "@mui/material/CircularProgress";
@@ -29,6 +28,8 @@ import CheckIcon from "@mui/icons-material/Check";
 import AreYouSureModal from "../Modals/AreYouSureModal";
 import toast from "react-hot-toast";
 import ScoreInput from "../ScoreInput";
+import { useScoreSheetLoader } from "../../utils/useScoreSheetLoader";
+import BulkScoreLoadError from "./BulkScoreLoadError";
 import { useFieldErrors } from "../../utils/useFieldErrors";
 
 type IScoreSheetTableProps = {
@@ -51,15 +52,9 @@ export default function ScoreSheetTableRedesign({
   const [openRows, setOpenRows] = React.useState<{ [key: number]: boolean }>(
     {}
   );
-  const { fetchScoreSheetWithData } = useMapScoreSheetStore();
-  const {
-    scoreSheet,
-    isLoadingScoreSheet,
-    updateScores,
-    submitScoreSheet,
-    clearScoreSheet,
-    setScoreSheet,
-  } = useScoreSheetStore();
+  const { scoreSheet, updateScores, submitScoreSheet, clearScoreSheet } =
+    useScoreSheetStore();
+  const { loadStatus, reload } = useScoreSheetLoader(judgeId, teamId, sheetType);
   const [openAreYouSure, setOpenAreYouSure] = useState(false);
   const { hasFieldErrors, setFieldError } = useFieldErrors();
 
@@ -72,26 +67,6 @@ export default function ScoreSheetTableRedesign({
     }));
   };
 
-  useEffect(() => {
-    if (teamId && judgeId) {
-      clearScoreSheet();
-      
-      // Use optimized method that gets both mapping and data in one call
-      fetchScoreSheetWithData(judgeId, teamId, sheetType)
-        .then((scoresheetData) => {
-          // Set the scoresheet data directly without needing a second API call
-          setScoreSheet(scoresheetData);
-        })
-        .catch((error) => {
-          console.error('Error fetching scoresheet:', error);
-        });
-    }
-  }, [teamId, judgeId, sheetType]); // Added sheetType to dependencies, removed clearScoreSheet and fetchScoreSheetId
-
-  /**
-   * Remove the second useEffect since we now get the data directly in the first call
-   * This eliminates the unnecessary second API call and loading state
-   */
 
   const [formData, setFormData] = useState<{
     [key: number]: number | string | undefined;
@@ -151,19 +126,21 @@ export default function ScoreSheetTableRedesign({
       toast.error("Fix the scores marked in red before saving.");
       return;
     }
-    if (scoreSheet) {
-      updateScores({
-        id: scoreSheet.id,
-        field1: formData[1],
-        field2: formData[2],
-        field3: formData[3],
-        field4: formData[4],
-        field5: formData[5],
-        field6: formData[6],
-        field7: formData[7],
-        field8: formData[8]?.toString(),
-      });
+    if (!scoreSheet) {
+      toast.error("This scoresheet isn't loaded, so nothing was saved.");
+      return;
     }
+    updateScores({
+      id: scoreSheet.id,
+      field1: formData[1],
+      field2: formData[2],
+      field3: formData[3],
+      field4: formData[4],
+      field5: formData[5],
+      field6: formData[6],
+      field7: formData[7],
+      field8: formData[8]?.toString(),
+    });
   };
 
   const allFieldsFilled = () => {
@@ -215,22 +192,25 @@ export default function ScoreSheetTableRedesign({
   };
 
   const handleSubmit = async () => {
+    if (!scoreSheet) {
+      toast.error("This scoresheet isn't loaded, so nothing was submitted.");
+      setOpenAreYouSure(false);
+      return;
+    }
     try {
-      if (scoreSheet) {
-        await submitScoreSheet({
-          id: scoreSheet.id,
-          isSubmitted: true,
-          sheetType: sheetType,
-          field1: formData[1],
-          field2: formData[2],
-          field3: formData[3],
-          field4: formData[4],
-          field5: formData[5],
-          field6: formData[6],
-          field7: formData[7],
-          field9: formData[8]?.toString(),
-        });
-      }
+      await submitScoreSheet({
+        id: scoreSheet.id,
+        isSubmitted: true,
+        sheetType: sheetType,
+        field1: formData[1],
+        field2: formData[2],
+        field3: formData[3],
+        field4: formData[4],
+        field5: formData[5],
+        field6: formData[6],
+        field7: formData[7],
+        field9: formData[8]?.toString(),
+      });
       setOpenAreYouSure(false);
       
       // Small delay to ensure toast is visible before navigation
@@ -244,7 +224,16 @@ export default function ScoreSheetTableRedesign({
     }
   };
 
-  return isLoadingScoreSheet ? (
+  if (loadStatus === "error") {
+    return (
+      <BulkScoreLoadError
+        message="This scoresheet could not be loaded, so nothing can be entered or saved yet. Check the connection and try again."
+        onRetry={reload}
+      />
+    );
+  }
+
+  return loadStatus === "loading" ? (
     <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '50vh' }}>
       <CircularProgress />
     </Box>

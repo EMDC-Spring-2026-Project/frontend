@@ -20,9 +20,10 @@ import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import theme from "../../theme";
 import { useNavigate } from "react-router-dom";
-import { useMapScoreSheetStore } from "../../store/map_stores/mapScoreSheetStore";
 import { useScoreSheetStore } from "../../store/primary_stores/scoreSheetStore";
 import { useEffect, useState, useCallback } from "react";
+import { useScoreSheetLoader } from "../../utils/useScoreSheetLoader";
+import BulkScoreLoadError from "./BulkScoreLoadError";
 import CircularProgress from "@mui/material/CircularProgress";
 import CloseIcon from "@mui/icons-material/Close";
 import CheckIcon from "@mui/icons-material/Check";
@@ -55,20 +56,10 @@ export default function ScoreSheetTable({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { hasFieldErrors, setFieldError } = useFieldErrors();
 
-  const { fetchScoreSheetWithData } = useMapScoreSheetStore();
-  const {
-    scoreSheet,
-    isLoadingScoreSheet,
-    updateScores,
-    submitScoreSheet,
-    clearScoreSheet,
-    setScoreSheet,
-  } = useScoreSheetStore();
+  const { scoreSheet, updateScores, submitScoreSheet } = useScoreSheetStore();
+  const { loadStatus, reload } = useScoreSheetLoader(judgeId, teamId, sheetType);
 
   const navigate = useNavigate();
-
-  // NEW: only show spinner for first load, not on every save
-  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
 
   const handleToggle = useCallback((id: number) => {
     setOpenRows((prevState) => ({
@@ -76,28 +67,6 @@ export default function ScoreSheetTable({
       [id]: !prevState[id],
     }));
   }, []);
-
-  useEffect(() => {
-    if (teamId && judgeId) {
-      // Clear the current scoresheet to prevent showing old data
-      clearScoreSheet();
-
-      fetchScoreSheetWithData(judgeId, teamId, sheetType)
-        .then((scoresheetData) => {
-          setScoreSheet(scoresheetData);
-        })
-        .catch((error) => {
-          console.error("Error fetching scoresheet:", error);
-        });
-    }
-  }, [teamId, judgeId, sheetType]); // keep your original deps
-
-  // Mark initial load done once scoresheet has loaded at least once
-  useEffect(() => {
-    if (!isLoadingScoreSheet && !initialLoadComplete) {
-      setInitialLoadComplete(true);
-    }
-  }, [isLoadingScoreSheet, initialLoadComplete]);
 
   const [formData, setFormData] = useState<{
     [key: number]: number | string | undefined;
@@ -143,7 +112,10 @@ export default function ScoreSheetTable({
 
 
   const handleSaveScoreSheet = useCallback(async () => {
-    if (!scoreSheet) return;
+    if (!scoreSheet) {
+      toast.error("This scoresheet isn't loaded, so nothing was saved.");
+      return;
+    }
     if (hasFieldErrors) {
       toast.error("Fix the scores marked in red before saving.");
       return;
@@ -219,24 +191,27 @@ export default function ScoreSheetTable({
 
   const handleSubmit = async () => {
   if (isSubmitting) return;
+  if (!scoreSheet) {
+    toast.error("This scoresheet isn't loaded, so nothing was submitted.");
+    setOpenAreYouSure(false);
+    return;
+  }
   setIsSubmitting(true);
   try {
-    if (scoreSheet) {
-      await submitScoreSheet({
-        id: scoreSheet.id,
-        isSubmitted: true,
-        sheetType: sheetType,
-        field1: formData[1],
-        field2: formData[2],
-        field3: formData[3],
-        field4: formData[4],
-        field5: formData[5],
-        field6: formData[6],
-        field7: formData[7],
-        field8: formData[8],
-        field9: formData[9]?.toString(),
-      });
-    }
+    await submitScoreSheet({
+      id: scoreSheet.id,
+      isSubmitted: true,
+      sheetType: sheetType,
+      field1: formData[1],
+      field2: formData[2],
+      field3: formData[3],
+      field4: formData[4],
+      field5: formData[5],
+      field6: formData[6],
+      field7: formData[7],
+      field8: formData[8],
+      field9: formData[9]?.toString(),
+    });
     setOpenAreYouSure(false);
     setTimeout(() => {
       navigate(-1);
@@ -249,8 +224,16 @@ export default function ScoreSheetTable({
   }
 };
 
-  // Spinner ONLY on first load
-  if (isLoadingScoreSheet && !initialLoadComplete) {
+  if (loadStatus === "error") {
+    return (
+      <BulkScoreLoadError
+        message="This scoresheet could not be loaded, so nothing can be entered or saved yet. Check the connection and try again."
+        onRetry={reload}
+      />
+    );
+  }
+
+  if (loadStatus === "loading") {
     return (
       <Box
         sx={{
