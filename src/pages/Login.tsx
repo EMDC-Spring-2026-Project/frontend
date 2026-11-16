@@ -15,9 +15,10 @@ import {
 import TriangleBackground from "../components/TriangleBackground";
 import { useEffect, useState } from "react";
 import { Visibility, VisibilityOff } from "@mui/icons-material";
-import theme from "../theme";
+import theme, { ACCESSIBLE_GREEN } from "../theme";
 import { useAuthStore } from "../store/primary_stores/authStore";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { SESSION_EXPIRED_REASON } from "../lib/sessionExpiry";
 
 export default function Login() {
   const { login, isLoadingAuth, authError, role, isAuthenticated } = useAuthStore();
@@ -27,8 +28,8 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
 
   const navigate = useNavigate();
-  const location = useLocation();
-  const sessionExpired = new URLSearchParams(location.search).get("reason") === "session-expired";
+  const [searchParams] = useSearchParams();
+  const sessionExpired = searchParams.get("reason") === SESSION_EXPIRED_REASON;
 
   // Redirect after successful login based on role
   useEffect(() => {
@@ -67,7 +68,11 @@ export default function Login() {
   return (
     <>
       <TriangleBackground />
-      <Button variant="contained" onClick={() => navigate("/")} sx={{ m: 1 }}>
+      <Button
+        variant="contained"
+        onClick={() => navigate("/")}
+        sx={{ m: 1, bgcolor: ACCESSIBLE_GREEN }}
+      >
         Back To Home
       </Button>
       <Container
@@ -96,6 +101,11 @@ export default function Login() {
         >
           Login
         </Typography>
+        {sessionExpired && authError == null && (
+          <Alert severity="warning" sx={{ mt: 3, width: 300 }}>
+            Your session expired. Please log in again.
+          </Alert>
+        )}
         <form
           onSubmit={handleLogin}
           style={{
@@ -108,21 +118,30 @@ export default function Login() {
         >
           <TextField
             required
+            id="login-email"
             label="Email"
+            autoComplete="username"
             variant="outlined"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             sx={{ mt: 5, width: 300 }}
           />
           <FormControl required sx={{ mt: 3, width: 300 }} variant="outlined">
-            <InputLabel>Password</InputLabel>
+            <InputLabel htmlFor="login-password">Password</InputLabel>
             <OutlinedInput
+              id="login-password"
+              autoComplete="current-password"
               type={showPassword ? "text" : "password"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               endAdornment={
                 <InputAdornment position="end">
-                  <IconButton onClick={handleClickShowPassword} edge="end">
+                  <IconButton
+                    onClick={handleClickShowPassword}
+                    edge="end"
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    aria-pressed={showPassword}
+                  >
                     {showPassword ? <VisibilityOff /> : <Visibility />}
                   </IconButton>
                 </InputAdornment>
@@ -138,7 +157,9 @@ export default function Login() {
               marginLeft: "-10.5rem",
             }}
           >
-            <Typography variant="body2">Forgot Password?</Typography>
+            <Typography variant="body2" sx={{ color: ACCESSIBLE_GREEN }}>
+              Forgot Password?
+            </Typography>
           </Link>
           <Button
             type="submit"
@@ -146,7 +167,7 @@ export default function Login() {
             sx={{
               width: 120,
               height: 35,
-              bgcolor: `${theme.palette.primary.main}`,
+              bgcolor: ACCESSIBLE_GREEN,
               color: `${theme.palette.secondary.main}`,
               mt: 5,
             }}
@@ -156,11 +177,6 @@ export default function Login() {
           {authError != null && (
             <Alert sx={{ mt: 3 }} severity="error">
               {authError}
-            </Alert>
-          )}
-          {sessionExpired && authError == null && (
-            <Alert sx={{ mt: 3 }} severity="warning">
-              Your session expired. Please log in again to continue.
             </Alert>
           )}
         </form>

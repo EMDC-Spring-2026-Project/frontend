@@ -964,9 +964,9 @@ useEffect(() => {
                             <Typography
                               variant="body2"
                               sx={{
+                                // No opacity here: faded green text drops below 4.5:1
                                 color: theme.palette.success.main,
                                 fontWeight: 500,
-                                opacity: 0.8,
                                 fontSize: { xs: "0.75rem", sm: "0.875rem" },
                                 whiteSpace: "nowrap",
                                 maxWidth: { xs: "200px", sm: "300px", md: "400px" },

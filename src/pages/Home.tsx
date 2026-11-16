@@ -259,7 +259,8 @@ export default function Home() {
                     sx={{
                       fontSize: "2.5rem",
                       fontWeight: 700,
-                      color: "#e0e0e0",
+                      // Large text: needs 3:1 against white (#888 is 3.5:1)
+                      color: "#888888",
                       lineHeight: 1,
                       minWidth: "60px",
                       fontFamily: '"DM Serif Display", "Georgia", serif',

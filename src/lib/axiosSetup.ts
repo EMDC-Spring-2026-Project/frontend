@@ -1,6 +1,8 @@
 import axios, { AxiosHeaders } from "axios";
 import { api, API_BASE_URL } from "./api";
-import type { InternalAxiosRequestConfig } from "axios";
+import type { AxiosError, InternalAxiosRequestConfig } from "axios";
+import { useAuthStore } from "../store/primary_stores/authStore";
+import { isSessionExpiredError, SESSION_EXPIRED_LOGIN_PATH } from "./sessionExpiry";
 
 function getCookie(name: string): string | null {
   const match = document.cookie.match(`(?:^|; )${name}=([^;]*)`);
@@ -45,3 +47,26 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   return config;
 });
 
+
+// When the server says the session is gone, drop the stale client-side login
+// and send the user to the login page with a "session expired" message instead
+// of letting each page show its own generic "Failed to ..." error.
+let redirectingToLogin = false;
+
+api.interceptors.response.use(
+  (response) => response,
+  (error: AxiosError) => {
+    if (
+      !redirectingToLogin &&
+      isSessionExpiredError(error) &&
+      useAuthStore.getState().isAuthenticated &&
+      !window.location.pathname.startsWith("/login")
+    ) {
+      redirectingToLogin = true;
+      useAuthStore.setState({ user: null, role: null, isAuthenticated: false });
+      sessionStorage.clear();
+      window.location.replace(SESSION_EXPIRED_LOGIN_PATH);
+    }
+    return Promise.reject(error);
+  }
+);

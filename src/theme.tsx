@@ -1,5 +1,10 @@
 import { createTheme } from "@mui/material/styles";
 
+// Brand green darkened just enough for 4.5:1 contrast with white (WCAG AA for
+// normal-size text). Use it for green text and for green buttons with white
+// text; the lighter brand green (#00a353) is only 3.3:1.
+export const ACCESSIBLE_GREEN = "#008542";
+
 const theme = createTheme({
   palette: {
     primary: {
@@ -26,17 +31,17 @@ const theme = createTheme({
     },
     body2: {
       fontSize: 16,
-      color: "#009A4A",
+      color: ACCESSIBLE_GREEN,
     },
     h1: {
       fontWeight: "550",
       fontSize: 28,
-      color: "#009A4A",
+      color: ACCESSIBLE_GREEN,
     },
     h2: {
       fontWeight: "550",
       fontSize: 20,
-      color: "#009A4A",
+      color: ACCESSIBLE_GREEN,
     },
   },
   components: {
