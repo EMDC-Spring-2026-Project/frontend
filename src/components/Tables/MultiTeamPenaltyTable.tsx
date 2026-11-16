@@ -25,7 +25,8 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import theme from "../../theme";
 import { useNavigate } from "react-router-dom";
 import AreYouSureModal from "../Modals/AreYouSureModal";
-import { useScoreSheetStore } from "../../store/primary_stores/scoreSheetStore";
+import { bulkPenaltyKey, useScoreSheetStore } from "../../store/primary_stores/scoreSheetStore";
+import BulkScoreLoadError from "./BulkScoreLoadError";
 import { useMapScoreSheetStore } from "../../store/map_stores/mapScoreSheetStore"; // 👈 add this
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
@@ -59,6 +60,7 @@ export default function MultiTeamPenaltyTable({
   title,
   penalties,
   judgeId,
+  contestId,
 }: IMultiTeamPenaltyTableProps) {
   const muiTheme = useMuiTheme();
   const isMobile = useMediaQuery(muiTheme.breakpoints.down("sm"));
@@ -70,11 +72,16 @@ export default function MultiTeamPenaltyTable({
 
   // Store wiring
   const {
-    multipleScoreSheets,
+    multipleScoreSheets: storedSheets,
     updateMultipleScores,
     submitMultipleScoreSheets,
-    isLoadingScoreSheet,
+    fetchMultiTeamPenalties,
+    bulkLoad,
   } = useScoreSheetStore();
+  const currentLoad = bulkLoad?.key === bulkPenaltyKey(judgeId ?? 0, contestId, sheetType)
+    ? bulkLoad : null;
+  const multipleScoreSheets = currentLoad?.state === "ready" ? storedSheets : null;
+  const loadedSheets = currentLoad?.sheets;
 
   // Mapping store to refresh judge dashboard after updates
   const { fetchScoreSheetsByJudge } = useMapScoreSheetStore();
@@ -167,14 +174,14 @@ export default function MultiTeamPenaltyTable({
 
   // Hydrate penaltyState from fetched sheets
   useEffect(() => {
-    if (multipleScoreSheets && multipleScoreSheets.length > 0) {
+    if (loadedSheets) {
       const newPenaltyState: {
         [teamId: number]: {
           [penaltyId: number]: number;
         };
       } = {};
 
-      multipleScoreSheets.forEach((sheet) => {
+      loadedSheets.forEach((sheet) => {
         if (!sheet || sheet.teamId === undefined) return;
 
         newPenaltyState[sheet.teamId] = {};
@@ -189,18 +196,9 @@ export default function MultiTeamPenaltyTable({
         });
       });
 
-      filteredTeams.forEach((team) => {
-        if (!newPenaltyState[team.id]) {
-          newPenaltyState[team.id] = {};
-          penalties.forEach((penalty) => {
-            newPenaltyState[team.id][penalty.id] = 0;
-          });
-        }
-      });
-
       setPenaltyState(newPenaltyState);
     }
-  }, [multipleScoreSheets, filteredTeams, penalties]);
+  }, [loadedSheets, penalties]);
 
   const handleCheckboxChange = (teamId: number, penaltyId: number) => {
     setPenaltyState((prev) => ({
@@ -311,15 +309,17 @@ export default function MultiTeamPenaltyTable({
     });
 
     if (updatedSheets.length > 0) {
-      // Navigate immediately to avoid showing loading state
-      setOpenAreYouSure(false);
-      navigate(-1);
+      try {
+        await submitMultipleScoreSheets(updatedSheets);
 
-      // Submit in background
-      await submitMultipleScoreSheets(updatedSheets);
-
-      if (judgeId) {
-        fetchScoreSheetsByJudge(judgeId).catch(() => {});
+        if (judgeId) {
+          fetchScoreSheetsByJudge(judgeId).catch(() => {});
+        }
+        setOpenAreYouSure(false);
+        navigate(-1);
+      } catch (error) {
+        console.error("Unable to submit all team penalty sheets:", error);
+        setOpenAreYouSure(false);
       }
     } else {
       setOpenAreYouSure(false);
@@ -338,7 +338,7 @@ export default function MultiTeamPenaltyTable({
     return grouped;
   }, [penalties]);
 
-  if (isLoadingScoreSheet) {
+  if (!currentLoad || currentLoad.state === "loading") {
     return (
       <>
         <Container
@@ -382,6 +382,17 @@ export default function MultiTeamPenaltyTable({
           <Typography variant="h6">Loading penalty sheets...</Typography>
         </Box>
       </>
+    );
+  }
+
+  if (currentLoad.state === "error") {
+    return (
+      <BulkScoreLoadError
+        message="Penalty scoresheets could not be loaded."
+        onRetry={() => {
+          if (judgeId) void fetchMultiTeamPenalties(judgeId, contestId, sheetType).catch(() => {});
+        }}
+      />
     );
   }
 
