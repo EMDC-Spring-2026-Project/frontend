@@ -28,6 +28,8 @@ import CloseIcon from "@mui/icons-material/Close";
 import CheckIcon from "@mui/icons-material/Check";
 import AreYouSureModal from "../Modals/AreYouSureModal";
 import toast from "react-hot-toast";
+import ScoreInput from "../ScoreInput";
+import { useFieldErrors } from "../../utils/useFieldErrors";
 
 type IScoreSheetTableProps = {
   sheetType: number;
@@ -59,6 +61,7 @@ export default function ScoreSheetTableRedesign({
     setScoreSheet,
   } = useScoreSheetStore();
   const [openAreYouSure, setOpenAreYouSure] = useState(false);
+  const { hasFieldErrors, setFieldError } = useFieldErrors();
 
   const navigate = useNavigate();
 
@@ -144,6 +147,10 @@ export default function ScoreSheetTableRedesign({
   };
 
   const handleSaveScoreSheet = () => {
+    if (hasFieldErrors) {
+      toast.error("Fix the scores marked in red before saving.");
+      return;
+    }
     if (scoreSheet) {
       updateScores({
         id: scoreSheet.id,
@@ -515,50 +522,20 @@ export default function ScoreSheetTableRedesign({
                                 maxWidth: { xs: "100px", sm: "140px" },
                                 mx: { xs: 0.5, sm: 2 }
                               }}>
-                                <TextField
-                                  id="outlined-number"
+                                <ScoreInput
+                                  id={`score-${question.id}`}
                                   label="Score"
-                                  type="number"
-                                  value={
-                                    formData[question.id] !== undefined && 
-                                    formData[question.id] !== null && 
-                                    formData[question.id] !== "" &&
-                                    formData[question.id] !== 0
-                                      ? formData[question.id]
-                                      : ""
+                                  value={formData[question.id]}
+                                  low={question.lowPoints}
+                                  high={question.highPoints}
+                                  onScoreChange={(value) =>
+                                    handleScoreChange(question.id, value)
                                   }
-                                  onWheel={(e) => {
-                                    const inputElement = e.target as HTMLInputElement;
-                                    inputElement.blur();
-                                  }}
-                                  onChange={(e) => {
-                                    let value = e.target.value;
-                                    if (value !== undefined) {
-                                      if (value === "") {
-                                        value = "";
-                                      } else if (value < question.lowPoints) {
-                                        value = "";
-                                      } else if (value > question.highPoints) {
-                                        value = "";
-                                      }
-                                    }
-                                    handleScoreChange(question.id, value);
-                                  }}
-                                  onKeyDown={(e) => {
-                                    if (e.key === "ArrowUp" || e.key === "ArrowDown") {
-                                      e.preventDefault();
-                                    }
-                                  }}
-                                  slotProps={{
-                                    inputLabel: {
-                                      shrink: true,
-                                    },
-                                    htmlInput: {
-                                      min: question.lowPoints,
-                                      max: question.highPoints,
-                                      step: 0.5,
-                                    },
-                                  }}
+                                  onErrorChange={(hasError) =>
+                                    setFieldError(question.id, hasError)
+                                  }
+                                  hint={`Allowed: ${question.lowPoints} – ${question.highPoints}`}
+                                  slotProps={{ inputLabel: { shrink: true } }}
                                   sx={{ 
                                     width: "100%",
                                     "& .MuiOutlinedInput-root": {
@@ -620,7 +597,7 @@ export default function ScoreSheetTableRedesign({
         <Button
           variant="contained"
           onClick={() => setOpenAreYouSure(true)}
-          disabled={!allFieldsFilled()}
+          disabled={!allFieldsFilled() || hasFieldErrors}
           sx={{
             mt: 3,
             bgcolor: theme.palette.success.main,

@@ -27,6 +27,8 @@ import CircularProgress from "@mui/material/CircularProgress";
 import CloseIcon from "@mui/icons-material/Close";
 import CheckIcon from "@mui/icons-material/Check";
 import AreYouSureModal from "../Modals/AreYouSureModal";
+import ScoreInput from "../ScoreInput";
+import { useFieldErrors } from "../../utils/useFieldErrors";
 import PenaltyCategory from "../PenaltyCategory";
 import { machineDesignQuestions } from "../../data/machineDesignQuestions";
 import { presentationQuestions } from "../../data/presentationQuestions";
@@ -78,6 +80,7 @@ export default function ChampionshipScoreSheetTable({
 
   // Confirm-submit modal
   const [openAreYouSure, setOpenAreYouSure] = useState(false);
+  const { hasFieldErrors, setFieldError } = useFieldErrors();
 
   // Form data state for scoring questions
   const [formData, setFormData] = useState<{ [key: number]: number | string | undefined }>({
@@ -290,6 +293,10 @@ export default function ChampionshipScoreSheetTable({
    * Save the score sheet (draft)
    */
   const handleSaveScoreSheet = () => {
+    if (hasFieldErrors) {
+      toast.error("Fix the scores marked in red before saving.");
+      return;
+    }
     if (scoreSheet) {
       const allFields: { [key: string]: number | string } = {};
       
@@ -811,49 +818,25 @@ export default function ChampionshipScoreSheetTable({
                                   maxWidth: { xs: "100%", sm: 150 },
                                   mt: { xs: 1, md: 0 }
                                 }}>
-                                  <TextField
+                                  <ScoreInput
+                                    id={`score-${index + 1}`}
                                     label="Score"
-                                    type="number"
-                                    value={formData[index + 1] || ""}
+                                    value={formData[index + 1]}
                                     disabled={scoreSheet?.isSubmitted}
-                                    onWheel={(e) => {
-                                      const inputElement = e.target as HTMLInputElement;
-                                      inputElement.blur();
-                                    }}
-                                    onChange={(e) => {
-          
-                                      let value: any = e.target.value;
-
-                                      if (value !== undefined) {
-                                        if (value === "") {
-                                          value = undefined; 
-                                        } else if (Number(value) < question.lowPoints) {
-                                          value = undefined; 
-                                        } else if (Number(value) > question.highPoints) {
-                                          value = undefined; 
-                                        } else {
-                                          value = Number(value); // Convert to number if valid
-                                        }
-                                      }
-
-                                      handleScoreChange(index + 1, value, question);
-                                    }}
-                                    onKeyDown={(e) => {
-                                      // block up/down arrows to prevent accidental changes
-                                      if (
-                                        e.key === "ArrowUp" ||
-                                        e.key === "ArrowDown"
-                                      ) {
-                                        e.preventDefault();
-                                      }
-                                    }}
-                                    inputProps={{ min: question.lowPoints, max: question.highPoints }}
-                                    helperText={
+                                    low={question.lowPoints}
+                                    high={question.highPoints}
+                                    onScoreChange={(value) =>
+                                      handleScoreChange(index + 1, value, question)
+                                    }
+                                    onErrorChange={(hasError) =>
+                                      setFieldError(index + 1, hasError)
+                                    }
+                                    hint={
                                       <span style={{ fontWeight: 'bold' }}>
                                         {question.lowPoints} - {question.highPoints}
                                       </span>
                                     }
-                                    sx={{ 
+                                    sx={{
                                       width: "100%",
                                       "& .MuiInputBase-input": {
                                         fontSize: { xs: "0.875rem", sm: "1rem" }
@@ -1074,49 +1057,25 @@ export default function ChampionshipScoreSheetTable({
                                   maxWidth: { xs: "100%", sm: 150 },
                                   mt: { xs: 1, md: 0 }
                                 }}>
-                                  <TextField
+                                  <ScoreInput
+                                    id={`score-${index + 10}`}
                                     label="Score"
-                                    type="number"
-                                    value={formData[index + 10] || ""}
+                                    value={formData[index + 10]}
                                     disabled={scoreSheet?.isSubmitted}
-                                    onWheel={(e) => {
-                                      const inputElement = e.target as HTMLInputElement;
-                                      inputElement.blur();
-                                    }}
-                                    onChange={(e) => {
-                          
-                                      let value: any = e.target.value;
-
-                                      if (value !== undefined) {
-                                        if (value === "") {
-                                          value = undefined; 
-                                        } else if (Number(value) < question.lowPoints) {
-                                          value = undefined; 
-                                        } else if (Number(value) > question.highPoints) {
-                                          value = undefined; 
-                                        } else {
-                                          value = Number(value); // Convert to number if valid
-                                        }
-                                      }
-
-                                      handleScoreChange(index + 10, value, question);
-                                    }}
-                                    onKeyDown={(e) => {
-                                      // block up/down arrows to prevent accidental changes
-                                      if (
-                                        e.key === "ArrowUp" ||
-                                        e.key === "ArrowDown"
-                                      ) {
-                                        e.preventDefault();
-                                      }
-                                    }}
-                                    inputProps={{ min: question.lowPoints, max: question.highPoints }}
-                                    helperText={
+                                    low={question.lowPoints}
+                                    high={question.highPoints}
+                                    onScoreChange={(value) =>
+                                      handleScoreChange(index + 10, value, question)
+                                    }
+                                    onErrorChange={(hasError) =>
+                                      setFieldError(index + 10, hasError)
+                                    }
+                                    hint={
                                       <span style={{ fontWeight: 'bold' }}>
                                         {question.lowPoints} - {question.highPoints}
                                       </span>
                                     }
-                                    sx={{ 
+                                    sx={{
                                       width: "100%",
                                       "& .MuiInputBase-input": {
                                         fontSize: { xs: "0.875rem", sm: "1rem" }
@@ -1347,7 +1306,7 @@ export default function ChampionshipScoreSheetTable({
         <Button
           variant="contained"
           onClick={() => setOpenAreYouSure(true)}
-          disabled={scoreSheet?.isSubmitted || !allFieldsFilled()}
+          disabled={scoreSheet?.isSubmitted || !allFieldsFilled() || hasFieldErrors}
           sx={{
             mt: 3,
             bgcolor: scoreSheet?.isSubmitted 
