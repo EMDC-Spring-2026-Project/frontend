@@ -94,6 +94,8 @@ export default function MultiTeamScoreSheet({
   );
   const [openAreYouSure, setOpenAreYouSure] = useState(false);
   const { hasFieldErrors, setFieldError } = useFieldErrors();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
 
   // Form data state: teamId -> questionId -> value
   const [formData, setFormData] = useState<{
@@ -327,6 +329,7 @@ export default function MultiTeamScoreSheet({
 
   const handleSubmit = useCallback(async () => {
     if (!multipleScoreSheets || multipleScoreSheets.length === 0) return;
+    if (isSubmittingRef.current) return;
 
     const updatedSheets: Array<any> = [];
 
@@ -350,6 +353,8 @@ export default function MultiTeamScoreSheet({
       }
     }
 
+    isSubmittingRef.current = true;
+    setIsSubmitting(true);
     try {
       if (updatedSheets.length > 0) {
         await submitMultipleScoreSheets(updatedSheets);
@@ -363,6 +368,9 @@ export default function MultiTeamScoreSheet({
     } catch (error) {
       console.error("Unable to submit all team scoresheets:", error);
       setOpenAreYouSure(false);
+    } finally {
+      isSubmittingRef.current = false;
+      setIsSubmitting(false);
     }
   }, [
     multipleScoreSheets,
@@ -1289,7 +1297,7 @@ export default function MultiTeamScoreSheet({
           <Button
             variant="contained"
             onClick={() => setOpenAreYouSure(true)}
-            disabled={!allFieldsFilled || hasFieldErrors}
+            disabled={!allFieldsFilled || hasFieldErrors || isSubmitting}
             sx={{
               mt: { xs: 2, sm: 3 },
               bgcolor: theme.palette.success.main,
@@ -1303,7 +1311,7 @@ export default function MultiTeamScoreSheet({
               fontWeight: 600,
             }}
           >
-            Submit All
+            {isSubmitting ? "Submitting…" : "Submit All"}
           </Button>
 
           <AreYouSureModal

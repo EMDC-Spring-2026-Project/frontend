@@ -57,6 +57,7 @@ export default function ScoreSheetTableRedesign({
   const { loadStatus, reload } = useScoreSheetLoader(judgeId, teamId, sheetType);
   const [openAreYouSure, setOpenAreYouSure] = useState(false);
   const { hasFieldErrors, setFieldError } = useFieldErrors();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const navigate = useNavigate();
 
@@ -192,11 +193,13 @@ export default function ScoreSheetTableRedesign({
   };
 
   const handleSubmit = async () => {
+    if (isSubmitting) return;
     if (!scoreSheet) {
       toast.error("This scoresheet isn't loaded, so nothing was submitted.");
       setOpenAreYouSure(false);
       return;
     }
+    setIsSubmitting(true);
     try {
       await submitScoreSheet({
         id: scoreSheet.id,
@@ -218,9 +221,11 @@ export default function ScoreSheetTableRedesign({
         navigate(-1);
       }, 100);
     } catch (error) {
+      // submitScoreSheet already shows the error toast
       console.error('Error submitting redesign scoresheet:', error);
-      toast.error("Failed to submit redesign scoresheet. Please try again.");
       setOpenAreYouSure(false);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -586,7 +591,7 @@ export default function ScoreSheetTableRedesign({
         <Button
           variant="contained"
           onClick={() => setOpenAreYouSure(true)}
-          disabled={!allFieldsFilled() || hasFieldErrors}
+          disabled={!allFieldsFilled() || hasFieldErrors || isSubmitting}
           sx={{
             mt: 3,
             bgcolor: theme.palette.success.main,
@@ -598,7 +603,7 @@ export default function ScoreSheetTableRedesign({
             borderRadius: 2,
           }}
         >
-          Submit
+          {isSubmitting ? "Submitting…" : "Submit"}
         </Button>
         <AreYouSureModal
           open={openAreYouSure}

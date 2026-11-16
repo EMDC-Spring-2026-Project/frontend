@@ -75,6 +75,7 @@ export default function ChampionshipScoreSheetTable({
   // Confirm-submit modal
   const [openAreYouSure, setOpenAreYouSure] = useState(false);
   const { hasFieldErrors, setFieldError } = useFieldErrors();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Form data state for scoring questions
   const [formData, setFormData] = useState<{ [key: number]: number | string | undefined }>({
@@ -354,11 +355,13 @@ export default function ChampionshipScoreSheetTable({
    * Submit the sheet (finalize). Navigates back after success.
    */
   const handleSubmit = async () => {
+    if (isSubmitting) return;
     if (!scoreSheet) {
       toast.error("This scoresheet isn't loaded, so nothing was submitted.");
       setOpenAreYouSure(false);
       return;
     }
+    setIsSubmitting(true);
     try {
       const allFields: { [key: string]: number | string } = {};
       
@@ -420,9 +423,11 @@ export default function ChampionshipScoreSheetTable({
         navigate(-1); // back to previous page
       }, 100);
     } catch (error) {
+      // submitScoreSheet already shows the error toast
       console.error('Error submitting championship scoresheet:', error);
-      toast.error("Failed to submit championship scoresheet. Please try again.");
       setOpenAreYouSure(false);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -1289,7 +1294,7 @@ export default function ChampionshipScoreSheetTable({
         <Button
           variant="contained"
           onClick={() => setOpenAreYouSure(true)}
-          disabled={scoreSheet?.isSubmitted || !allFieldsFilled() || hasFieldErrors}
+          disabled={scoreSheet?.isSubmitted || !allFieldsFilled() || hasFieldErrors || isSubmitting}
           sx={{
             mt: 3,
             bgcolor: scoreSheet?.isSubmitted 
@@ -1310,7 +1315,11 @@ export default function ChampionshipScoreSheetTable({
             fontWeight: 600
           }}
         >
-          {scoreSheet?.isSubmitted ? "Scores Submitted" : "Submit Final Scores"}
+          {scoreSheet?.isSubmitted
+            ? "Scores Submitted"
+            : isSubmitting
+              ? "Submitting…"
+              : "Submit Final Scores"}
         </Button>
 
         {/* Confirmation modal */}

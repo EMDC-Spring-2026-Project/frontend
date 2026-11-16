@@ -138,6 +138,7 @@ export default function MultiTeamPenaltyTable({
   }, [multipleScoreSheets]);
 
   const [openAreYouSure, setOpenAreYouSure] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
 
   const handleToggle = (category: string) => {
@@ -292,6 +293,7 @@ export default function MultiTeamPenaltyTable({
 
   const handleSubmit = async () => {
     if (!multipleScoreSheets || multipleScoreSheets.length === 0) return;
+    if (isSubmitting) return;
 
     const penaltyValues = calculatePenaltyValues();
     const updatedSheets: any[] = [];
@@ -309,6 +311,7 @@ export default function MultiTeamPenaltyTable({
     });
 
     if (updatedSheets.length > 0) {
+      setIsSubmitting(true);
       try {
         await submitMultipleScoreSheets(updatedSheets);
 
@@ -320,6 +323,8 @@ export default function MultiTeamPenaltyTable({
       } catch (error) {
         console.error("Unable to submit all team penalty sheets:", error);
         setOpenAreYouSure(false);
+      } finally {
+        setIsSubmitting(false);
       }
     } else {
       setOpenAreYouSure(false);
@@ -1118,6 +1123,7 @@ export default function MultiTeamPenaltyTable({
           <Button
             variant="contained"
             onClick={() => setOpenAreYouSure(true)}
+            disabled={isSubmitting}
             sx={{
               mt: { xs: 2, sm: 3 },
               bgcolor: theme.palette.success.main,
@@ -1131,7 +1137,7 @@ export default function MultiTeamPenaltyTable({
               fontWeight: 600,
             }}
           >
-            Submit All
+            {isSubmitting ? "Submitting…" : "Submit All"}
           </Button>
 
           <AreYouSureModal
