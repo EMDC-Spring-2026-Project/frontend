@@ -20,13 +20,16 @@ import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import theme from "../../theme";
 import { useNavigate } from "react-router-dom";
-import { useMapScoreSheetStore } from "../../store/map_stores/mapScoreSheetStore";
 import { useScoreSheetStore } from "../../store/primary_stores/scoreSheetStore";
 import { useEffect, useState } from "react";
 import CircularProgress from "@mui/material/CircularProgress";
 import CloseIcon from "@mui/icons-material/Close";
 import CheckIcon from "@mui/icons-material/Check";
 import AreYouSureModal from "../Modals/AreYouSureModal";
+import ScoreInput from "../ScoreInput";
+import { useScoreSheetLoader } from "../../utils/useScoreSheetLoader";
+import BulkScoreLoadError from "./BulkScoreLoadError";
+import { useFieldErrors } from "../../utils/useFieldErrors";
 import PenaltyCategory from "../PenaltyCategory";
 import { machineDesignQuestions } from "../../data/machineDesignQuestions";
 import { presentationQuestions } from "../../data/presentationQuestions";
@@ -66,18 +69,13 @@ export default function ChampionshipScoreSheetTable({
   const [openQuestions, setOpenQuestions] = React.useState<{ [key: number]: boolean }>({});
 
   // Store hooks for retrieving the score sheet mapping and data
-  const { fetchScoreSheetWithData } = useMapScoreSheetStore();
-  const {
-    scoreSheet,
-    isLoadingScoreSheet,
-    updateScores,
-    submitScoreSheet,
-    clearScoreSheet,
-    setScoreSheet,
-  } = useScoreSheetStore();
+  const { scoreSheet, updateScores, submitScoreSheet } = useScoreSheetStore();
+  const { loadStatus, reload } = useScoreSheetLoader(judgeId, teamId, sheetType);
 
   // Confirm-submit modal
   const [openAreYouSure, setOpenAreYouSure] = useState(false);
+  const { hasFieldErrors, setFieldError } = useFieldErrors();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Form data state for scoring questions
   const [formData, setFormData] = useState<{ [key: number]: number | string | undefined }>({
@@ -126,31 +124,6 @@ export default function ChampionshipScoreSheetTable({
     }));
   };
 
-  /**
-   * On mount / when team/judge change:
-   * fetch both the scoreSheetId and the full scoresheet data in one optimized call
-   */
-  useEffect(() => {
-    if (teamId && judgeId) {
-      // Clear the current scoresheet to prevent showing old data
-      clearScoreSheet();
-      
-      // Use optimized method that gets both mapping and data in one call
-      fetchScoreSheetWithData(judgeId, teamId, sheetType)
-        .then((scoresheetData) => {
-          // Set the scoresheet data directly without needing a second API call
-          setScoreSheet(scoresheetData);
-        })
-        .catch((error) => {
-          console.error('Error fetching scoresheet:', error);
-        });
-    }
-  }, [teamId, judgeId, sheetType]); // Added sheetType to dependencies, removed clearScoreSheet and fetchScoreSheetId
-
-  /**
-   * Remove the second useEffect since we now get the data directly in the first call
-   * This eliminates the unnecessary second API call and loading state
-   */
 
   /**
    * When scoreSheet data arrives:
@@ -290,53 +263,59 @@ export default function ChampionshipScoreSheetTable({
    * Save the score sheet (draft)
    */
   const handleSaveScoreSheet = () => {
-    if (scoreSheet) {
-      const allFields: { [key: string]: number | string } = {};
-      
-      // Add all form data fields (Machine Design, Presentation, Comments)
-      Object.keys(formData).forEach((key) => {
-        const questionId = Number(key);
-        const value = formData[questionId];
-        
-        // Handle different field types
-        if (questionId === 9 || questionId === 18) {
-          // Comment fields - convert null/undefined to empty string
-          allFields[`field${questionId}`] = value !== undefined && value !== null ? value : "";
-        } else {
-          // Score fields - convert null/undefined to 0
-          allFields[`field${questionId}`] = value !== undefined && value !== null ? value : 0;
-        }
-      });
-
-      // Add penalty fields (mapped to fields 19+)
-      // General Penalties: fields 19-25 (7 questions)
-      generalPenaltiesQuestions.forEach((penalty, index) => {
-        const fieldNumber = 19 + index;
-        const penaltyValue = Number(penaltyState[`general_${penalty.id}`]) || 0;
-        const pointValue = Number(penalty.pointValue) || 0;
-        const fieldValue = penaltyValue * pointValue;
-        allFields[`field${fieldNumber}`] = fieldValue;
-      });
-
-      // Run Penalties: fields 26-42 (17 questions, skipping empty id 9)
-      let runPenaltyFieldIndex = 0;
-      runPenaltiesQuestions.forEach((penalty) => {
-        // Skip the empty field9 (id 9) in run penalties
-        if (penalty.id === 9) return;
-        
-        const fieldNumber = 26 + runPenaltyFieldIndex;
-        const penaltyValue = Number(penaltyState[`run_${penalty.id}`]) || 0;
-        const pointValue = Number(penalty.pointValue) || 0;
-        const fieldValue = penaltyValue * pointValue;
-        allFields[`field${fieldNumber}`] = fieldValue;
-        runPenaltyFieldIndex++;
-      });
-
-      updateScores({
-        id: scoreSheet.id,
-        ...allFields,
-      });
+    if (hasFieldErrors) {
+      toast.error("Fix the scores marked in red before saving.");
+      return;
     }
+    if (!scoreSheet) {
+      toast.error("This scoresheet isn't loaded, so nothing was saved.");
+      return;
+    }
+    const allFields: { [key: string]: number | string } = {};
+    
+    // Add all form data fields (Machine Design, Presentation, Comments)
+    Object.keys(formData).forEach((key) => {
+      const questionId = Number(key);
+      const value = formData[questionId];
+      
+      // Handle different field types
+      if (questionId === 9 || questionId === 18) {
+        // Comment fields - convert null/undefined to empty string
+        allFields[`field${questionId}`] = value !== undefined && value !== null ? value : "";
+      } else {
+        // Score fields - convert null/undefined to 0
+        allFields[`field${questionId}`] = value !== undefined && value !== null ? value : 0;
+      }
+    });
+
+    // Add penalty fields (mapped to fields 19+)
+    // General Penalties: fields 19-25 (7 questions)
+    generalPenaltiesQuestions.forEach((penalty, index) => {
+      const fieldNumber = 19 + index;
+      const penaltyValue = Number(penaltyState[`general_${penalty.id}`]) || 0;
+      const pointValue = Number(penalty.pointValue) || 0;
+      const fieldValue = penaltyValue * pointValue;
+      allFields[`field${fieldNumber}`] = fieldValue;
+    });
+
+    // Run Penalties: fields 26-42 (17 questions, skipping empty id 9)
+    let runPenaltyFieldIndex = 0;
+    runPenaltiesQuestions.forEach((penalty) => {
+      // Skip the empty field9 (id 9) in run penalties
+      if (penalty.id === 9) return;
+      
+      const fieldNumber = 26 + runPenaltyFieldIndex;
+      const penaltyValue = Number(penaltyState[`run_${penalty.id}`]) || 0;
+      const pointValue = Number(penalty.pointValue) || 0;
+      const fieldValue = penaltyValue * pointValue;
+      allFields[`field${fieldNumber}`] = fieldValue;
+      runPenaltyFieldIndex++;
+    });
+
+    updateScores({
+      id: scoreSheet.id,
+      ...allFields,
+    });
   };
 
   /**
@@ -376,62 +355,67 @@ export default function ChampionshipScoreSheetTable({
    * Submit the sheet (finalize). Navigates back after success.
    */
   const handleSubmit = async () => {
+    if (isSubmitting) return;
+    if (!scoreSheet) {
+      toast.error("This scoresheet isn't loaded, so nothing was submitted.");
+      setOpenAreYouSure(false);
+      return;
+    }
+    setIsSubmitting(true);
     try {
-      if (scoreSheet) {
-        const allFields: { [key: string]: number | string } = {};
+      const allFields: { [key: string]: number | string } = {};
+      
+      // Add all form data fields (Machine Design, Presentation, Comments)
+      Object.keys(formData).forEach((key) => {
+        const questionId = Number(key);
+        const value = formData[questionId];
         
-        // Add all form data fields (Machine Design, Presentation, Comments)
-        Object.keys(formData).forEach((key) => {
-          const questionId = Number(key);
-          const value = formData[questionId];
-          
-          // Handle different field types
-          if (questionId === 9 || questionId === 18) {
-            // Comment fields - convert null/undefined to empty string
-            allFields[`field${questionId}`] = value !== undefined && value !== null ? value : "";
-          } else {
-            // Score fields - convert null/undefined to 0
-            allFields[`field${questionId}`] = value !== undefined && value !== null ? value : 0;
-          }
-        });
+        // Handle different field types
+        if (questionId === 9 || questionId === 18) {
+          // Comment fields - convert null/undefined to empty string
+          allFields[`field${questionId}`] = value !== undefined && value !== null ? value : "";
+        } else {
+          // Score fields - convert null/undefined to 0
+          allFields[`field${questionId}`] = value !== undefined && value !== null ? value : 0;
+        }
+      });
 
-        // Add penalty fields (mapped to fields 19+)
-        // General Penalties: fields 19-25 (7 questions)
-        generalPenaltiesQuestions.forEach((penalty, index) => {
-          const fieldNumber = 19 + index;
-          const penaltyValue = Number(penaltyState[`general_${penalty.id}`]) || 0;
-          // Convert penalty state to actual penalty points
-          // For checkboxes: 1 = apply penalty, 0 = no penalty
-          // For increments: count = number of times penalty applies
-          const pointValue = Number(penalty.pointValue) || 0;
-          const actualPenaltyPoints = penaltyValue * pointValue;
-          allFields[`field${fieldNumber}`] = actualPenaltyPoints;
-        });
+      // Add penalty fields (mapped to fields 19+)
+      // General Penalties: fields 19-25 (7 questions)
+      generalPenaltiesQuestions.forEach((penalty, index) => {
+        const fieldNumber = 19 + index;
+        const penaltyValue = Number(penaltyState[`general_${penalty.id}`]) || 0;
+        // Convert penalty state to actual penalty points
+        // For checkboxes: 1 = apply penalty, 0 = no penalty
+        // For increments: count = number of times penalty applies
+        const pointValue = Number(penalty.pointValue) || 0;
+        const actualPenaltyPoints = penaltyValue * pointValue;
+        allFields[`field${fieldNumber}`] = actualPenaltyPoints;
+      });
 
-        // Run Penalties: fields 26-42 (17 questions, skipping empty id 9)
-        let runPenaltyFieldIndex = 0;
-        runPenaltiesQuestions.forEach((penalty) => {
-          // Skip the empty field9 (id 9) in run penalties
-          if (penalty.id === 9) return;
-          
-          const fieldNumber = 26 + runPenaltyFieldIndex;
-          const penaltyValue = Number(penaltyState[`run_${penalty.id}`]) || 0;
-          // Convert penalty state to actual penalty points
-          const pointValue = Number(penalty.pointValue) || 0;
-          const actualPenaltyPoints = penaltyValue * pointValue;
-          allFields[`field${fieldNumber}`] = actualPenaltyPoints;
-          runPenaltyFieldIndex++;
-        });
-
-        await submitScoreSheet({
-          id: scoreSheet.id,
-          isSubmitted: true,
-          sheetType: sheetType,
-          ...allFields,
-        });
+      // Run Penalties: fields 26-42 (17 questions, skipping empty id 9)
+      let runPenaltyFieldIndex = 0;
+      runPenaltiesQuestions.forEach((penalty) => {
+        // Skip the empty field9 (id 9) in run penalties
+        if (penalty.id === 9) return;
         
+        const fieldNumber = 26 + runPenaltyFieldIndex;
+        const penaltyValue = Number(penaltyState[`run_${penalty.id}`]) || 0;
+        // Convert penalty state to actual penalty points
+        const pointValue = Number(penalty.pointValue) || 0;
+        const actualPenaltyPoints = penaltyValue * pointValue;
+        allFields[`field${fieldNumber}`] = actualPenaltyPoints;
+        runPenaltyFieldIndex++;
+      });
+
+      await submitScoreSheet({
+        id: scoreSheet.id,
+        isSubmitted: true,
+        sheetType: sheetType,
+        ...allFields,
+      });
+      
      
-      }
       setOpenAreYouSure(false);
       
       // Small delay to ensure toast is visible before navigation
@@ -439,14 +423,25 @@ export default function ChampionshipScoreSheetTable({
         navigate(-1); // back to previous page
       }, 100);
     } catch (error) {
+      // submitScoreSheet already shows the error toast
       console.error('Error submitting championship scoresheet:', error);
-      toast.error("Failed to submit championship scoresheet. Please try again.");
       setOpenAreYouSure(false);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
+  if (loadStatus === "error") {
+    return (
+      <BulkScoreLoadError
+        message="This scoresheet could not be loaded, so nothing can be entered or saved yet. Check the connection and try again."
+        onRetry={reload}
+      />
+    );
+  }
+
   // Show a spinner while the sheet is loading
-  return isLoadingScoreSheet ? (
+  return loadStatus === "loading" ? (
     <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '50vh' }}>
       <CircularProgress />
     </Box>
@@ -811,49 +806,25 @@ export default function ChampionshipScoreSheetTable({
                                   maxWidth: { xs: "100%", sm: 150 },
                                   mt: { xs: 1, md: 0 }
                                 }}>
-                                  <TextField
+                                  <ScoreInput
+                                    id={`score-${index + 1}`}
                                     label="Score"
-                                    type="number"
-                                    value={formData[index + 1] || ""}
+                                    value={formData[index + 1]}
                                     disabled={scoreSheet?.isSubmitted}
-                                    onWheel={(e) => {
-                                      const inputElement = e.target as HTMLInputElement;
-                                      inputElement.blur();
-                                    }}
-                                    onChange={(e) => {
-          
-                                      let value: any = e.target.value;
-
-                                      if (value !== undefined) {
-                                        if (value === "") {
-                                          value = undefined; 
-                                        } else if (Number(value) < question.lowPoints) {
-                                          value = undefined; 
-                                        } else if (Number(value) > question.highPoints) {
-                                          value = undefined; 
-                                        } else {
-                                          value = Number(value); // Convert to number if valid
-                                        }
-                                      }
-
-                                      handleScoreChange(index + 1, value, question);
-                                    }}
-                                    onKeyDown={(e) => {
-                                      // block up/down arrows to prevent accidental changes
-                                      if (
-                                        e.key === "ArrowUp" ||
-                                        e.key === "ArrowDown"
-                                      ) {
-                                        e.preventDefault();
-                                      }
-                                    }}
-                                    inputProps={{ min: question.lowPoints, max: question.highPoints }}
-                                    helperText={
+                                    low={question.lowPoints}
+                                    high={question.highPoints}
+                                    onScoreChange={(value) =>
+                                      handleScoreChange(index + 1, value, question)
+                                    }
+                                    onErrorChange={(hasError) =>
+                                      setFieldError(index + 1, hasError)
+                                    }
+                                    hint={
                                       <span style={{ fontWeight: 'bold' }}>
                                         {question.lowPoints} - {question.highPoints}
                                       </span>
                                     }
-                                    sx={{ 
+                                    sx={{
                                       width: "100%",
                                       "& .MuiInputBase-input": {
                                         fontSize: { xs: "0.875rem", sm: "1rem" }
@@ -1074,49 +1045,25 @@ export default function ChampionshipScoreSheetTable({
                                   maxWidth: { xs: "100%", sm: 150 },
                                   mt: { xs: 1, md: 0 }
                                 }}>
-                                  <TextField
+                                  <ScoreInput
+                                    id={`score-${index + 10}`}
                                     label="Score"
-                                    type="number"
-                                    value={formData[index + 10] || ""}
+                                    value={formData[index + 10]}
                                     disabled={scoreSheet?.isSubmitted}
-                                    onWheel={(e) => {
-                                      const inputElement = e.target as HTMLInputElement;
-                                      inputElement.blur();
-                                    }}
-                                    onChange={(e) => {
-                          
-                                      let value: any = e.target.value;
-
-                                      if (value !== undefined) {
-                                        if (value === "") {
-                                          value = undefined; 
-                                        } else if (Number(value) < question.lowPoints) {
-                                          value = undefined; 
-                                        } else if (Number(value) > question.highPoints) {
-                                          value = undefined; 
-                                        } else {
-                                          value = Number(value); // Convert to number if valid
-                                        }
-                                      }
-
-                                      handleScoreChange(index + 10, value, question);
-                                    }}
-                                    onKeyDown={(e) => {
-                                      // block up/down arrows to prevent accidental changes
-                                      if (
-                                        e.key === "ArrowUp" ||
-                                        e.key === "ArrowDown"
-                                      ) {
-                                        e.preventDefault();
-                                      }
-                                    }}
-                                    inputProps={{ min: question.lowPoints, max: question.highPoints }}
-                                    helperText={
+                                    low={question.lowPoints}
+                                    high={question.highPoints}
+                                    onScoreChange={(value) =>
+                                      handleScoreChange(index + 10, value, question)
+                                    }
+                                    onErrorChange={(hasError) =>
+                                      setFieldError(index + 10, hasError)
+                                    }
+                                    hint={
                                       <span style={{ fontWeight: 'bold' }}>
                                         {question.lowPoints} - {question.highPoints}
                                       </span>
                                     }
-                                    sx={{ 
+                                    sx={{
                                       width: "100%",
                                       "& .MuiInputBase-input": {
                                         fontSize: { xs: "0.875rem", sm: "1rem" }
@@ -1347,7 +1294,7 @@ export default function ChampionshipScoreSheetTable({
         <Button
           variant="contained"
           onClick={() => setOpenAreYouSure(true)}
-          disabled={scoreSheet?.isSubmitted || !allFieldsFilled()}
+          disabled={scoreSheet?.isSubmitted || !allFieldsFilled() || hasFieldErrors || isSubmitting}
           sx={{
             mt: 3,
             bgcolor: scoreSheet?.isSubmitted 
@@ -1368,7 +1315,11 @@ export default function ChampionshipScoreSheetTable({
             fontWeight: 600
           }}
         >
-          {scoreSheet?.isSubmitted ? "Scores Submitted" : "Submit Final Scores"}
+          {scoreSheet?.isSubmitted
+            ? "Scores Submitted"
+            : isSubmitting
+              ? "Submitting…"
+              : "Submit Final Scores"}
         </Button>
 
         {/* Confirmation modal */}

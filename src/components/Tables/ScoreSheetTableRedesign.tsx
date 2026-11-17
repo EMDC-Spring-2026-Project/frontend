@@ -20,7 +20,6 @@ import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import theme from "../../theme";
 import { useNavigate } from "react-router-dom";
-import { useMapScoreSheetStore } from "../../store/map_stores/mapScoreSheetStore";
 import { useScoreSheetStore } from "../../store/primary_stores/scoreSheetStore";
 import { useEffect, useState } from "react";
 import CircularProgress from "@mui/material/CircularProgress";
@@ -28,6 +27,10 @@ import CloseIcon from "@mui/icons-material/Close";
 import CheckIcon from "@mui/icons-material/Check";
 import AreYouSureModal from "../Modals/AreYouSureModal";
 import toast from "react-hot-toast";
+import ScoreInput from "../ScoreInput";
+import { useScoreSheetLoader } from "../../utils/useScoreSheetLoader";
+import BulkScoreLoadError from "./BulkScoreLoadError";
+import { useFieldErrors } from "../../utils/useFieldErrors";
 
 type IScoreSheetTableProps = {
   sheetType: number;
@@ -49,16 +52,12 @@ export default function ScoreSheetTableRedesign({
   const [openRows, setOpenRows] = React.useState<{ [key: number]: boolean }>(
     {}
   );
-  const { fetchScoreSheetWithData } = useMapScoreSheetStore();
-  const {
-    scoreSheet,
-    isLoadingScoreSheet,
-    updateScores,
-    submitScoreSheet,
-    clearScoreSheet,
-    setScoreSheet,
-  } = useScoreSheetStore();
+  const { scoreSheet, updateScores, submitScoreSheet, clearScoreSheet } =
+    useScoreSheetStore();
+  const { loadStatus, reload } = useScoreSheetLoader(judgeId, teamId, sheetType);
   const [openAreYouSure, setOpenAreYouSure] = useState(false);
+  const { hasFieldErrors, setFieldError } = useFieldErrors();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const navigate = useNavigate();
 
@@ -69,26 +68,6 @@ export default function ScoreSheetTableRedesign({
     }));
   };
 
-  useEffect(() => {
-    if (teamId && judgeId) {
-      clearScoreSheet();
-      
-      // Use optimized method that gets both mapping and data in one call
-      fetchScoreSheetWithData(judgeId, teamId, sheetType)
-        .then((scoresheetData) => {
-          // Set the scoresheet data directly without needing a second API call
-          setScoreSheet(scoresheetData);
-        })
-        .catch((error) => {
-          console.error('Error fetching scoresheet:', error);
-        });
-    }
-  }, [teamId, judgeId, sheetType]); // Added sheetType to dependencies, removed clearScoreSheet and fetchScoreSheetId
-
-  /**
-   * Remove the second useEffect since we now get the data directly in the first call
-   * This eliminates the unnecessary second API call and loading state
-   */
 
   const [formData, setFormData] = useState<{
     [key: number]: number | string | undefined;
@@ -144,19 +123,27 @@ export default function ScoreSheetTableRedesign({
   };
 
   const handleSaveScoreSheet = () => {
-    if (scoreSheet) {
-      updateScores({
-        id: scoreSheet.id,
-        field1: formData[1],
-        field2: formData[2],
-        field3: formData[3],
-        field4: formData[4],
-        field5: formData[5],
-        field6: formData[6],
-        field7: formData[7],
-        field8: formData[8]?.toString(),
-      });
+    if (hasFieldErrors) {
+      toast.error("Fix the scores marked in red before saving.");
+      return;
     }
+    if (!scoreSheet) {
+      toast.error("This scoresheet isn't loaded, so nothing was saved.");
+      return;
+    }
+    updateScores({
+      id: scoreSheet.id,
+      field1: formData[1],
+      field2: formData[2],
+      field3: formData[3],
+      field4: formData[4],
+      field5: formData[5],
+      field6: formData[6],
+      field7: formData[7],
+      // The comment box is question 8 on screen but is stored in field9
+      // (the backend ignores field8 on redesign sheets).
+      field9: formData[8]?.toString(),
+    });
   };
 
   const allFieldsFilled = () => {
@@ -208,22 +195,27 @@ export default function ScoreSheetTableRedesign({
   };
 
   const handleSubmit = async () => {
+    if (isSubmitting) return;
+    if (!scoreSheet) {
+      toast.error("This scoresheet isn't loaded, so nothing was submitted.");
+      setOpenAreYouSure(false);
+      return;
+    }
+    setIsSubmitting(true);
     try {
-      if (scoreSheet) {
-        await submitScoreSheet({
-          id: scoreSheet.id,
-          isSubmitted: true,
-          sheetType: sheetType,
-          field1: formData[1],
-          field2: formData[2],
-          field3: formData[3],
-          field4: formData[4],
-          field5: formData[5],
-          field6: formData[6],
-          field7: formData[7],
-          field9: formData[8]?.toString(),
-        });
-      }
+      await submitScoreSheet({
+        id: scoreSheet.id,
+        isSubmitted: true,
+        sheetType: sheetType,
+        field1: formData[1],
+        field2: formData[2],
+        field3: formData[3],
+        field4: formData[4],
+        field5: formData[5],
+        field6: formData[6],
+        field7: formData[7],
+        field9: formData[8]?.toString(),
+      });
       setOpenAreYouSure(false);
       
       // Small delay to ensure toast is visible before navigation
@@ -231,13 +223,24 @@ export default function ScoreSheetTableRedesign({
         navigate(-1);
       }, 100);
     } catch (error) {
+      // submitScoreSheet already shows the error toast
       console.error('Error submitting redesign scoresheet:', error);
-      toast.error("Failed to submit redesign scoresheet. Please try again.");
       setOpenAreYouSure(false);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  return isLoadingScoreSheet ? (
+  if (loadStatus === "error") {
+    return (
+      <BulkScoreLoadError
+        message="This scoresheet could not be loaded, so nothing can be entered or saved yet. Check the connection and try again."
+        onRetry={reload}
+      />
+    );
+  }
+
+  return loadStatus === "loading" ? (
     <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '50vh' }}>
       <CircularProgress />
     </Box>
@@ -515,50 +518,20 @@ export default function ScoreSheetTableRedesign({
                                 maxWidth: { xs: "100px", sm: "140px" },
                                 mx: { xs: 0.5, sm: 2 }
                               }}>
-                                <TextField
-                                  id="outlined-number"
+                                <ScoreInput
+                                  id={`score-${question.id}`}
                                   label="Score"
-                                  type="number"
-                                  value={
-                                    formData[question.id] !== undefined && 
-                                    formData[question.id] !== null && 
-                                    formData[question.id] !== "" &&
-                                    formData[question.id] !== 0
-                                      ? formData[question.id]
-                                      : ""
+                                  value={formData[question.id]}
+                                  low={question.lowPoints}
+                                  high={question.highPoints}
+                                  onScoreChange={(value) =>
+                                    handleScoreChange(question.id, value)
                                   }
-                                  onWheel={(e) => {
-                                    const inputElement = e.target as HTMLInputElement;
-                                    inputElement.blur();
-                                  }}
-                                  onChange={(e) => {
-                                    let value = e.target.value;
-                                    if (value !== undefined) {
-                                      if (value === "") {
-                                        value = "";
-                                      } else if (value < question.lowPoints) {
-                                        value = "";
-                                      } else if (value > question.highPoints) {
-                                        value = "";
-                                      }
-                                    }
-                                    handleScoreChange(question.id, value);
-                                  }}
-                                  onKeyDown={(e) => {
-                                    if (e.key === "ArrowUp" || e.key === "ArrowDown") {
-                                      e.preventDefault();
-                                    }
-                                  }}
-                                  slotProps={{
-                                    inputLabel: {
-                                      shrink: true,
-                                    },
-                                    htmlInput: {
-                                      min: question.lowPoints,
-                                      max: question.highPoints,
-                                      step: 0.5,
-                                    },
-                                  }}
+                                  onErrorChange={(hasError) =>
+                                    setFieldError(question.id, hasError)
+                                  }
+                                  hint={`Allowed: ${question.lowPoints} – ${question.highPoints}`}
+                                  slotProps={{ inputLabel: { shrink: true } }}
                                   sx={{ 
                                     width: "100%",
                                     "& .MuiOutlinedInput-root": {
@@ -620,7 +593,7 @@ export default function ScoreSheetTableRedesign({
         <Button
           variant="contained"
           onClick={() => setOpenAreYouSure(true)}
-          disabled={!allFieldsFilled()}
+          disabled={!allFieldsFilled() || hasFieldErrors || isSubmitting}
           sx={{
             mt: 3,
             bgcolor: theme.palette.success.main,
@@ -632,7 +605,7 @@ export default function ScoreSheetTableRedesign({
             borderRadius: 2,
           }}
         >
-          Submit
+          {isSubmitting ? "Submitting…" : "Submit"}
         </Button>
         <AreYouSureModal
           open={openAreYouSure}

@@ -20,13 +20,17 @@ import KeyboardArrowUpIcon from "@mui/icons-material/KeyboardArrowUp";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import theme from "../../theme";
 import { useNavigate } from "react-router-dom";
-import { useMapScoreSheetStore } from "../../store/map_stores/mapScoreSheetStore";
 import { useScoreSheetStore } from "../../store/primary_stores/scoreSheetStore";
 import { useEffect, useState, useCallback } from "react";
+import { useScoreSheetLoader } from "../../utils/useScoreSheetLoader";
+import BulkScoreLoadError from "./BulkScoreLoadError";
 import CircularProgress from "@mui/material/CircularProgress";
 import CloseIcon from "@mui/icons-material/Close";
 import CheckIcon from "@mui/icons-material/Check";
 import AreYouSureModal from "../Modals/AreYouSureModal";
+import ScoreInput from "../ScoreInput";
+import { useFieldErrors } from "../../utils/useFieldErrors";
+import toast from "react-hot-toast";
 
 type IScoreSheetTableProps = {
   sheetType: number;
@@ -50,21 +54,12 @@ export default function ScoreSheetTable({
   const [openRows, setOpenRows] = React.useState<{ [key: number]: boolean }>({});
   const [openAreYouSure, setOpenAreYouSure] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { hasFieldErrors, setFieldError } = useFieldErrors();
 
-  const { fetchScoreSheetWithData } = useMapScoreSheetStore();
-  const {
-    scoreSheet,
-    isLoadingScoreSheet,
-    updateScores,
-    submitScoreSheet,
-    clearScoreSheet,
-    setScoreSheet,
-  } = useScoreSheetStore();
+  const { scoreSheet, updateScores, submitScoreSheet } = useScoreSheetStore();
+  const { loadStatus, reload } = useScoreSheetLoader(judgeId, teamId, sheetType);
 
   const navigate = useNavigate();
-
-  // NEW: only show spinner for first load, not on every save
-  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
 
   const handleToggle = useCallback((id: number) => {
     setOpenRows((prevState) => ({
@@ -72,28 +67,6 @@ export default function ScoreSheetTable({
       [id]: !prevState[id],
     }));
   }, []);
-
-  useEffect(() => {
-    if (teamId && judgeId) {
-      // Clear the current scoresheet to prevent showing old data
-      clearScoreSheet();
-
-      fetchScoreSheetWithData(judgeId, teamId, sheetType)
-        .then((scoresheetData) => {
-          setScoreSheet(scoresheetData);
-        })
-        .catch((error) => {
-          console.error("Error fetching scoresheet:", error);
-        });
-    }
-  }, [teamId, judgeId, sheetType]); // keep your original deps
-
-  // Mark initial load done once scoresheet has loaded at least once
-  useEffect(() => {
-    if (!isLoadingScoreSheet && !initialLoadComplete) {
-      setInitialLoadComplete(true);
-    }
-  }, [isLoadingScoreSheet, initialLoadComplete]);
 
   const [formData, setFormData] = useState<{
     [key: number]: number | string | undefined;
@@ -139,7 +112,14 @@ export default function ScoreSheetTable({
 
 
   const handleSaveScoreSheet = useCallback(async () => {
-    if (!scoreSheet) return;
+    if (!scoreSheet) {
+      toast.error("This scoresheet isn't loaded, so nothing was saved.");
+      return;
+    }
+    if (hasFieldErrors) {
+      toast.error("Fix the scores marked in red before saving.");
+      return;
+    }
 
     const scoreData = {
       id: scoreSheet.id,
@@ -163,7 +143,7 @@ export default function ScoreSheetTable({
       console.error("Error saving scoresheet:", err);
 
     }
-  }, [scoreSheet, formData, updateScores]);
+  }, [scoreSheet, formData, updateScores, hasFieldErrors]);
 
   const allFieldsFilled = () => {
     const allFilled = Object.keys(formData).every((key) => {
@@ -211,24 +191,27 @@ export default function ScoreSheetTable({
 
   const handleSubmit = async () => {
   if (isSubmitting) return;
+  if (!scoreSheet) {
+    toast.error("This scoresheet isn't loaded, so nothing was submitted.");
+    setOpenAreYouSure(false);
+    return;
+  }
   setIsSubmitting(true);
   try {
-    if (scoreSheet) {
-      await submitScoreSheet({
-        id: scoreSheet.id,
-        isSubmitted: true,
-        sheetType: sheetType,
-        field1: formData[1],
-        field2: formData[2],
-        field3: formData[3],
-        field4: formData[4],
-        field5: formData[5],
-        field6: formData[6],
-        field7: formData[7],
-        field8: formData[8],
-        field9: formData[9]?.toString(),
-      });
-    }
+    await submitScoreSheet({
+      id: scoreSheet.id,
+      isSubmitted: true,
+      sheetType: sheetType,
+      field1: formData[1],
+      field2: formData[2],
+      field3: formData[3],
+      field4: formData[4],
+      field5: formData[5],
+      field6: formData[6],
+      field7: formData[7],
+      field8: formData[8],
+      field9: formData[9]?.toString(),
+    });
     setOpenAreYouSure(false);
     setTimeout(() => {
       navigate(-1);
@@ -241,8 +224,16 @@ export default function ScoreSheetTable({
   }
 };
 
-  // Spinner ONLY on first load
-  if (isLoadingScoreSheet && !initialLoadComplete) {
+  if (loadStatus === "error") {
+    return (
+      <BulkScoreLoadError
+        message="This scoresheet could not be loaded, so nothing can be entered or saved yet. Check the connection and try again."
+        onRetry={reload}
+      />
+    );
+  }
+
+  if (loadStatus === "loading") {
     return (
       <Box
         sx={{
@@ -740,63 +731,20 @@ export default function ScoreSheetTable({
                                   mx: { xs: 0.5, sm: 2 },
                                 }}
                               >
-                                <TextField
-                                  id="outlined-number"
+                                <ScoreInput
+                                  id={`score-${question.id}`}
                                   label="Score"
-                                  type="number"
-                                  value={
-                                    formData[question.id] !== undefined &&
-                                    formData[question.id] !== null &&
-                                    formData[question.id] !== "" &&
-                                    formData[question.id] !== 0
-                                      ? formData[question.id]
-                                      : ""
+                                  value={formData[question.id]}
+                                  low={question.lowPoints}
+                                  high={question.highPoints}
+                                  onScoreChange={(value) =>
+                                    handleScoreChange(question.id, value)
                                   }
-                                  onWheel={(e) => {
-                                    const inputElement =
-                                      e.target as HTMLInputElement;
-                                    inputElement.blur();
-                                  }}
-                                  onChange={(e) => {
-                                    let value: any = e.target.value;
-
-                                    if (value !== undefined) {
-                                      if (value === "") {
-                                        value = undefined;
-                                      } else if (
-                                        Number(value) < question.lowPoints
-                                      ) {
-                                        value = undefined;
-                                      } else if (
-                                        Number(value) > question.highPoints
-                                      ) {
-                                        value = undefined;
-                                      } else {
-                                        value = Number(value);
-                                      }
-                                    }
-
-                                    handleScoreChange(question.id, value);
-                                  }}
-                                  onKeyDown={(e) => {
-                                    if (
-                                      e.key === "ArrowUp" ||
-                                      e.key === "ArrowDown"
-                                    ) {
-                                      e.preventDefault();
-                                    }
-                                  }}
-                                  slotProps={{
-                                    inputLabel: {
-                                      shrink: true,
-                                    },
-                                    htmlInput: {
-                                      min: question.lowPoints,
-                                      max: question.highPoints,
-                                      step: 0.5,
-                                    },
-                                  }}
-                                  helperText={`Allowed: ${question.lowPoints} – ${question.highPoints}`}
+                                  onErrorChange={(hasError) =>
+                                    setFieldError(question.id, hasError)
+                                  }
+                                  hint={`Allowed: ${question.lowPoints} – ${question.highPoints}`}
+                                  slotProps={{ inputLabel: { shrink: true } }}
                                   sx={{
                                     width: "100%",
                                     "& .MuiOutlinedInput-root.Mui-focused fieldset":
@@ -891,7 +839,7 @@ export default function ScoreSheetTable({
           type="button"
           variant="contained"
           onClick={() => setOpenAreYouSure(true)}
-          disabled={!allFieldsFilled() || isSubmitting}
+          disabled={!allFieldsFilled() || hasFieldErrors || isSubmitting}
           sx={{
             mt: 3,
             bgcolor: theme.palette.success.main,
