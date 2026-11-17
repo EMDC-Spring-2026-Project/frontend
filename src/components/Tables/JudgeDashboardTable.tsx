@@ -436,8 +436,12 @@ useEffect(() => {
   const currentClusterType = currentCluster?.cluster_type || "preliminary";
   const clusterTypeChanged = lastClusterTypeRef.current !== currentClusterType;
 
-  // Always fetch if cluster type changed (e.g., championship advancement)
-  if (clusterTypeChanged || !hasMappingsForJudge) {
+  // Always fetch if cluster type changed (e.g., championship advancement).
+  // Fetch missing mappings only once per judge: a judge with no scoresheets
+  // yet gets an empty result, which must not trigger another fetch (that used
+  // to loop forever).
+  const alreadyFetchedForJudge = lastFetchedJudgeIdRef.current === judge.id;
+  if (clusterTypeChanged || (!hasMappingsForJudge && !alreadyFetchedForJudge)) {
     try {
       fetchScoreSheetsByJudge(judge.id);
       fetchFreshTeamAdvancementData(); // Fetch fresh advancement data
