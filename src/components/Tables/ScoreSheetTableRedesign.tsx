@@ -140,7 +140,9 @@ export default function ScoreSheetTableRedesign({
       field5: formData[5],
       field6: formData[6],
       field7: formData[7],
-      field8: formData[8]?.toString(),
+      // The comment box is question 8 on screen but is stored in field9
+      // (the backend ignores field8 on redesign sheets).
+      field9: formData[8]?.toString(),
     });
   };
 
