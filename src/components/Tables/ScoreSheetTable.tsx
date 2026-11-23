@@ -24,6 +24,8 @@ import { useScoreSheetStore } from "../../store/primary_stores/scoreSheetStore";
 import { useEffect, useState, useCallback } from "react";
 import { useScoreSheetLoader } from "../../utils/useScoreSheetLoader";
 import BulkScoreLoadError from "./BulkScoreLoadError";
+import { useScoreDraft } from "../../utils/useScoreDraft";
+import DraftRestoredNotice from "../DraftRestoredNotice";
 import CircularProgress from "@mui/material/CircularProgress";
 import CloseIcon from "@mui/icons-material/Close";
 import CheckIcon from "@mui/icons-material/Check";
@@ -100,6 +102,14 @@ export default function ScoreSheetTable({
     }
   }, [scoreSheet]);
 
+  // Keep typed-but-unsaved scores across a refresh (#11)
+  const { restored, markSaved, discardDraft } = useScoreDraft({
+    draftKey: judgeId && teamId ? `${judgeId}:${teamId}:${sheetType}` : null,
+    ready: loadStatus === "ready" && !!scoreSheet,
+    values: formData,
+    setValues: setFormData,
+  });
+
   const handleScoreChange = useCallback(
     (questionId: number, value: number | string | undefined) => {
       setFormData((prevState) => ({
@@ -137,13 +147,14 @@ export default function ScoreSheetTable({
 
     try {
       await updateScores(scoreData);
+      markSaved();
    
       // no navigation, no reload
     } catch (err) {
       console.error("Error saving scoresheet:", err);
 
     }
-  }, [scoreSheet, formData, updateScores, hasFieldErrors]);
+  }, [scoreSheet, formData, updateScores, hasFieldErrors, markSaved]);
 
   const allFieldsFilled = () => {
     const allFilled = Object.keys(formData).every((key) => {
@@ -212,6 +223,7 @@ export default function ScoreSheetTable({
       field8: formData[8],
       field9: formData[9]?.toString(),
     });
+    markSaved();
     setOpenAreYouSure(false);
     setTimeout(() => {
       navigate(-1);
@@ -378,6 +390,8 @@ export default function ScoreSheetTable({
             Collapse All
           </Button>
         </Box>
+
+        {restored && <DraftRestoredNotice onDiscard={discardDraft} />}
 
         <Divider sx={{ mb: 2 }} />
 

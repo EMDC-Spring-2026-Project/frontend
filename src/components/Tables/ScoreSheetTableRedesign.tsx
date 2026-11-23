@@ -30,6 +30,8 @@ import toast from "react-hot-toast";
 import ScoreInput from "../ScoreInput";
 import { useScoreSheetLoader } from "../../utils/useScoreSheetLoader";
 import BulkScoreLoadError from "./BulkScoreLoadError";
+import { useScoreDraft } from "../../utils/useScoreDraft";
+import DraftRestoredNotice from "../DraftRestoredNotice";
 import { useFieldErrors } from "../../utils/useFieldErrors";
 
 type IScoreSheetTableProps = {
@@ -112,6 +114,14 @@ export default function ScoreSheetTableRedesign({
     };
   }, [clearScoreSheet]);
 
+  // Keep typed-but-unsaved scores across a refresh (#11)
+  const { restored, markSaved, discardDraft } = useScoreDraft({
+    draftKey: judgeId && teamId ? `${judgeId}:${teamId}:${sheetType}` : null,
+    ready: loadStatus === "ready" && !!scoreSheet,
+    values: formData,
+    setValues: setFormData,
+  });
+
   const handleScoreChange = (
     questionId: number,
     value: number | string | undefined
@@ -143,7 +153,11 @@ export default function ScoreSheetTableRedesign({
       // The comment box is question 8 on screen but is stored in field9
       // (the backend ignores field8 on redesign sheets).
       field9: formData[8]?.toString(),
-    });
+    })
+      .then(markSaved)
+      .catch(() => {
+        // updateScores already shows the error toast; the draft is kept.
+      });
   };
 
   const allFieldsFilled = () => {
@@ -216,6 +230,7 @@ export default function ScoreSheetTableRedesign({
         field7: formData[7],
         field9: formData[8]?.toString(),
       });
+      markSaved();
       setOpenAreYouSure(false);
       
       // Small delay to ensure toast is visible before navigation
@@ -389,6 +404,8 @@ export default function ScoreSheetTableRedesign({
             Collapse All
           </Button>
         </Box>
+        {restored && <DraftRestoredNotice onDiscard={discardDraft} />}
+
         <Divider sx={{ mb: 2 }} />
 
         {/* Scoring table: each question row can be expanded to show criteria + input */}

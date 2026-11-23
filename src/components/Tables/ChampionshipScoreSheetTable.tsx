@@ -29,6 +29,8 @@ import AreYouSureModal from "../Modals/AreYouSureModal";
 import ScoreInput from "../ScoreInput";
 import { useScoreSheetLoader } from "../../utils/useScoreSheetLoader";
 import BulkScoreLoadError from "./BulkScoreLoadError";
+import { useScoreDraft } from "../../utils/useScoreDraft";
+import DraftRestoredNotice from "../DraftRestoredNotice";
 import { penaltyCountFromPoints } from "../../utils/penalties";
 import { useFieldErrors } from "../../utils/useFieldErrors";
 import PenaltyCategory from "../PenaltyCategory";
@@ -189,6 +191,26 @@ export default function ChampionshipScoreSheetTable({
     }
   }, [scoreSheet]);
 
+  // Keep typed-but-unsaved scores and penalties across a refresh (#11)
+  const draftValues = React.useMemo(
+    () => ({ form: formData, penalties: penaltyState }),
+    [formData, penaltyState]
+  );
+  const setDraftValues = React.useCallback(
+    (values: { form: typeof formData; penalties: typeof penaltyState }) => {
+      setFormData(values.form ?? {});
+      setPenaltyState(values.penalties ?? {});
+    },
+    []
+  );
+  const { restored, markSaved, discardDraft } = useScoreDraft({
+    draftKey: judgeId && teamId ? `${judgeId}:${teamId}:${sheetType}` : null,
+    ready: loadStatus === "ready" && !!scoreSheet,
+    values: draftValues,
+    setValues: setDraftValues,
+    disabled: !!scoreSheet?.isSubmitted,
+  });
+
   // Helper function to safely get field values
   const getattr = (obj: any, field: string, defaultValue: any) => {
     return obj && obj[field] !== undefined ? obj[field] : defaultValue;
@@ -309,7 +331,11 @@ export default function ChampionshipScoreSheetTable({
     updateScores({
       id: scoreSheet.id,
       ...allFields,
-    });
+    })
+      .then(markSaved)
+      .catch(() => {
+        // updateScores already shows the error toast; the draft is kept.
+      });
   };
 
   /**
@@ -408,6 +434,7 @@ export default function ChampionshipScoreSheetTable({
         sheetType: sheetType,
         ...allFields,
       });
+      markSaved();
       
      
       setOpenAreYouSure(false);
@@ -644,6 +671,8 @@ export default function ChampionshipScoreSheetTable({
             Collapse All Sections
           </Button>
         </Box>
+
+        {restored && <DraftRestoredNotice onDiscard={discardDraft} />}
 
         <Divider sx={{ mb: 2 }} />
 

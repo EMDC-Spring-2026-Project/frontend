@@ -52,6 +52,8 @@ import { useFieldErrors } from "../../utils/useFieldErrors";
 // ==============================
 import { bulkScoreKey, useScoreSheetStore } from "../../store/primary_stores/scoreSheetStore";
 import BulkScoreLoadError from "./BulkScoreLoadError";
+import { useScoreDraft } from "../../utils/useScoreDraft";
+import DraftRestoredNotice from "../DraftRestoredNotice";
 import { useMapScoreSheetStore } from "../../store/map_stores/mapScoreSheetStore";
 
 // ==============================
@@ -242,6 +244,17 @@ export default function MultiTeamScoreSheet({
     []
   );
 
+  // Keep typed-but-unsaved scores across a refresh (#11)
+  const draftKey = judgeId && teamIds.length
+    ? `multi:${judgeId}:${sheetType}:${[...teamIds].sort((a, b) => a - b).join(",")}`
+    : null;
+  const { restored, markSaved, discardDraft } = useScoreDraft({
+    draftKey,
+    ready: loadState === "ready" && !!multipleScoreSheets,
+    values: formData,
+    setValues: setFormData,
+  });
+
   const teamToSheetMap = useMemo(() => {
     if (!multipleScoreSheets) return new Map();
     return new Map(multipleScoreSheets.map((sheet) => [sheet.teamId, sheet]));
@@ -287,6 +300,7 @@ export default function MultiTeamScoreSheet({
 
     if (updatedSheets.length > 0) {
       await updateMultipleScores(updatedSheets);
+      markSaved();
       toast.success("Scores saved successfully!");
 
       if (judgeId) {
@@ -358,6 +372,7 @@ export default function MultiTeamScoreSheet({
     try {
       if (updatedSheets.length > 0) {
         await submitMultipleScoreSheets(updatedSheets);
+        markSaved();
 
         if (judgeId) {
           fetchScoreSheetsByJudge(judgeId).catch(() => {});
@@ -743,6 +758,8 @@ export default function MultiTeamScoreSheet({
               "opacity 0.4s ease-in-out, transform 0.4s ease-in-out",
           }}
         >
+          {restored && <DraftRestoredNotice onDiscard={discardDraft} />}
+
           {/* Action buttons */}
           <Box
             sx={{

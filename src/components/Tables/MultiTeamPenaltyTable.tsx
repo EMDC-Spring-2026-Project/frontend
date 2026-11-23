@@ -27,6 +27,8 @@ import { useNavigate } from "react-router-dom";
 import AreYouSureModal from "../Modals/AreYouSureModal";
 import { bulkPenaltyKey, useScoreSheetStore } from "../../store/primary_stores/scoreSheetStore";
 import BulkScoreLoadError from "./BulkScoreLoadError";
+import { useScoreDraft } from "../../utils/useScoreDraft";
+import DraftRestoredNotice from "../DraftRestoredNotice";
 import { penaltyCountFromPoints } from "../../utils/penalties";
 import { useMapScoreSheetStore } from "../../store/map_stores/mapScoreSheetStore"; // 👈 add this
 import { useEffect, useState } from "react";
@@ -200,6 +202,14 @@ export default function MultiTeamPenaltyTable({
     }
   }, [loadedSheets, penalties]);
 
+  // Keep ticked-but-unsaved penalties across a refresh (#11)
+  const { restored, markSaved, discardDraft } = useScoreDraft({
+    draftKey: judgeId ? `multi-penalty:${judgeId}:${contestId}:${sheetType}` : null,
+    ready: currentLoad?.state === "ready" && !!loadedSheets,
+    values: penaltyState,
+    setValues: setPenaltyState,
+  });
+
   const handleCheckboxChange = (teamId: number, penaltyId: number) => {
     setPenaltyState((prev) => ({
       ...prev,
@@ -280,6 +290,7 @@ export default function MultiTeamPenaltyTable({
 
     if (updatedSheets.length > 0) {
       await updateMultipleScores(updatedSheets);
+      markSaved();
       toast.success("Scores saved successfully!");
 
       if (judgeId) {
@@ -313,6 +324,7 @@ export default function MultiTeamPenaltyTable({
       setIsSubmitting(true);
       try {
         await submitMultipleScoreSheets(updatedSheets);
+        markSaved();
 
         if (judgeId) {
           fetchScoreSheetsByJudge(judgeId).catch(() => {});
@@ -530,6 +542,8 @@ export default function MultiTeamPenaltyTable({
               *Use checkboxes for yes/no penalties, counters for occurrences
             </Typography>
           </Box>
+
+          {restored && <DraftRestoredNotice onDiscard={discardDraft} />}
 
           {/* Action buttons */}
           <Box
