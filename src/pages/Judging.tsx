@@ -174,8 +174,15 @@ export default React.memo(function Judging() {
   // Initial scoresheet mappings for judge
   // ---------------------------------------------------------------------------
 
+  // Judge whose mappings this effect already requested. A judge with no
+  // scoresheets yet gets an empty result, which must not trigger another fetch
+  // (that used to loop forever). Other refreshes call fetchScoreSheetsByJudge
+  // directly and are not affected.
+  const requestedMappingsForJudge = useRef<number | null>(null);
+
   useEffect(() => {
     if (!judge?.id) return;
+    if (requestedMappingsForJudge.current === judge.id) return;
 
     const hasMappingsForJudge =
       Object.keys(mappings).length > 0 &&
@@ -183,7 +190,10 @@ export default React.memo(function Judging() {
 
     // First visit or after hard refresh → fetch mappings
     if (!hasMappingsForJudge) {
-      fetchScoreSheetsByJudge(judge.id);
+      requestedMappingsForJudge.current = judge.id;
+      fetchScoreSheetsByJudge(judge.id).catch((error) => {
+        console.error("Failed to load scoresheet mappings for judge:", error);
+      });
     }
   }, [judge?.id, mappings, fetchScoreSheetsByJudge]);
 

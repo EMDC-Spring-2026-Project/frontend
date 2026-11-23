@@ -44,12 +44,16 @@ import { useTheme as useMuiTheme } from "@mui/material/styles";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import theme from "../../theme";
 import toast from "react-hot-toast";
+import ScoreInput from "../ScoreInput";
+import { useFieldErrors } from "../../utils/useFieldErrors";
 
 // ==============================
 // Store Hooks
 // ==============================
 import { bulkScoreKey, useScoreSheetStore } from "../../store/primary_stores/scoreSheetStore";
 import BulkScoreLoadError from "./BulkScoreLoadError";
+import { useScoreDraft } from "../../utils/useScoreDraft";
+import DraftRestoredNotice from "../DraftRestoredNotice";
 import { useMapScoreSheetStore } from "../../store/map_stores/mapScoreSheetStore";
 
 // ==============================
@@ -91,6 +95,9 @@ export default function MultiTeamScoreSheet({
     {}
   );
   const [openAreYouSure, setOpenAreYouSure] = useState(false);
+  const { hasFieldErrors, setFieldError } = useFieldErrors();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const isSubmittingRef = useRef(false);
 
   // Form data state: teamId -> questionId -> value
   const [formData, setFormData] = useState<{
@@ -237,6 +244,17 @@ export default function MultiTeamScoreSheet({
     []
   );
 
+  // Keep typed-but-unsaved scores across a refresh (#11)
+  const draftKey = judgeId && teamIds.length
+    ? `multi:${judgeId}:${sheetType}:${[...teamIds].sort((a, b) => a - b).join(",")}`
+    : null;
+  const { restored, markSaved, discardDraft } = useScoreDraft({
+    draftKey,
+    ready: loadState === "ready" && !!multipleScoreSheets,
+    values: formData,
+    setValues: setFormData,
+  });
+
   const teamToSheetMap = useMemo(() => {
     if (!multipleScoreSheets) return new Map();
     return new Map(multipleScoreSheets.map((sheet) => [sheet.teamId, sheet]));
@@ -244,6 +262,10 @@ export default function MultiTeamScoreSheet({
 
   const handleSaveScoreSheets = useCallback(async () => {
     if (!multipleScoreSheets || multipleScoreSheets.length === 0) return;
+    if (hasFieldErrors) {
+      toast.error("Fix the scores marked in red before saving.");
+      return;
+    }
 
     const updatedSheets: Array<{
       id: number;
@@ -278,6 +300,7 @@ export default function MultiTeamScoreSheet({
 
     if (updatedSheets.length > 0) {
       await updateMultipleScores(updatedSheets);
+      markSaved();
       toast.success("Scores saved successfully!");
 
       if (judgeId) {
@@ -294,6 +317,7 @@ export default function MultiTeamScoreSheet({
     updateMultipleScores,
     judgeId,
     fetchScoreSheetsByJudge,
+    hasFieldErrors,
   ]);
 
   const allFieldsFilled = useMemo(() => {
@@ -319,6 +343,7 @@ export default function MultiTeamScoreSheet({
 
   const handleSubmit = useCallback(async () => {
     if (!multipleScoreSheets || multipleScoreSheets.length === 0) return;
+    if (isSubmittingRef.current) return;
 
     const updatedSheets: Array<any> = [];
 
@@ -342,9 +367,12 @@ export default function MultiTeamScoreSheet({
       }
     }
 
+    isSubmittingRef.current = true;
+    setIsSubmitting(true);
     try {
       if (updatedSheets.length > 0) {
         await submitMultipleScoreSheets(updatedSheets);
+        markSaved();
 
         if (judgeId) {
           fetchScoreSheetsByJudge(judgeId).catch(() => {});
@@ -355,6 +383,9 @@ export default function MultiTeamScoreSheet({
     } catch (error) {
       console.error("Unable to submit all team scoresheets:", error);
       setOpenAreYouSure(false);
+    } finally {
+      isSubmittingRef.current = false;
+      setIsSubmitting(false);
     }
   }, [
     multipleScoreSheets,
@@ -727,6 +758,8 @@ export default function MultiTeamScoreSheet({
               "opacity 0.4s ease-in-out, transform 0.4s ease-in-out",
           }}
         >
+          {restored && <DraftRestoredNotice onDiscard={discardDraft} />}
+
           {/* Action buttons */}
           <Box
             sx={{
@@ -896,65 +929,29 @@ export default function MultiTeamScoreSheet({
                                   gap: 0.5,
                                 }}
                               >
-                                <TextField
-                                  type="number"
+                                <ScoreInput
                                   size="small"
-                                  value={
-                                    formData[team.id] &&
-                                    formData[team.id][question.id] !==
-                                      undefined &&
-                                    formData[team.id][question.id] !== null &&
-                                    formData[team.id][question.id] !== "" &&
-                                    formData[team.id][question.id] !== 0
-                                      ? formData[team.id][question.id]
-                                      : ""
-                                  }
+                                  slotProps={{
+                                    htmlInput: {
+                                      "aria-label": `${team.name}: ${question.questionText}`,
+                                    },
+                                  }}
+                                  value={formData[team.id]?.[question.id]}
+                                  low={question.lowPoints}
+                                  high={question.highPoints}
                                   onClick={(e) => e.stopPropagation()}
-                                  onWheel={(e) => {
-                                    const inputElement =
-                                      e.target as HTMLInputElement;
-                                    inputElement.blur();
-                                  }}
-                                  onChange={(e) => {
-                                    let value:
-                                      | number
-                                      | string
-                                      | undefined = e.target.value;
-
-                                    if (value === "") {
-                                      value = undefined;
-                                    } else if (
-                                      Number(value) < question.lowPoints
-                                    ) {
-                                      value = undefined;
-                                    } else if (
-                                      Number(value) > question.highPoints
-                                    ) {
-                                      value = undefined;
-                                    } else {
-                                      value = Number(value);
-                                    }
-
-                                    handleScoreChange(
-                                      team.id,
-                                      question.id,
-                                      value
-                                    );
-                                  }}
-                                  onKeyDown={(e) => {
-                                    if (
-                                      e.key === "ArrowUp" ||
-                                      e.key === "ArrowDown"
-                                    ) {
-                                      e.preventDefault();
-                                    }
-                                  }}
-                                  inputProps={{
-                                    min: question.lowPoints,
-                                    max: question.highPoints,
-                                    step: 0.5,
-                                  }}
+                                  onScoreChange={(value) =>
+                                    handleScoreChange(team.id, question.id, value)
+                                  }
+                                  onErrorChange={(hasError) =>
+                                    setFieldError(`${team.id}-${question.id}`, hasError)
+                                  }
                                   sx={{
+                                    "& .MuiFormHelperText-root": {
+                                      mx: 0,
+                                      fontSize: "0.65rem",
+                                      lineHeight: 1.2,
+                                    },
                                     width: "70px",
                                     "& .MuiInputBase-input": {
                                       fontSize: "0.75rem",
@@ -1167,65 +1164,29 @@ export default function MultiTeamScoreSheet({
                           <TableCell key={team.id} align="center">
                             {question.id !== 9 ? (
                               <>
-                                <TextField
-                                  onClick={(e) => e.stopPropagation()}
-                                  type="number"
+                                <ScoreInput
                                   size="small"
-                                  value={
-                                    formData[team.id] &&
-                                    formData[team.id][question.id] !==
-                                      undefined &&
-                                    formData[team.id][question.id] !== null &&
-                                    formData[team.id][question.id] !== "" &&
-                                    formData[team.id][question.id] !== 0
-                                      ? formData[team.id][question.id]
-                                      : ""
+                                  slotProps={{
+                                    htmlInput: {
+                                      "aria-label": `${team.name}: ${question.questionText}`,
+                                    },
+                                  }}
+                                  value={formData[team.id]?.[question.id]}
+                                  low={question.lowPoints}
+                                  high={question.highPoints}
+                                  onClick={(e) => e.stopPropagation()}
+                                  onScoreChange={(value) =>
+                                    handleScoreChange(team.id, question.id, value)
                                   }
-                                  onWheel={(e) => {
-                                    const inputElement =
-                                      e.target as HTMLInputElement;
-                                    inputElement.blur();
-                                  }}
-                                  onChange={(e) => {
-                                    let value:
-                                      | number
-                                      | string
-                                      | undefined = e.target.value;
-
-                                    if (value === "") {
-                                      value = undefined;
-                                    } else if (
-                                      Number(value) < question.lowPoints
-                                    ) {
-                                      value = undefined;
-                                    } else if (
-                                      Number(value) > question.highPoints
-                                    ) {
-                                      value = undefined;
-                                    } else {
-                                      value = Number(value);
-                                    }
-
-                                    handleScoreChange(
-                                      team.id,
-                                      question.id,
-                                      value
-                                    );
-                                  }}
-                                  onKeyDown={(e) => {
-                                    if (
-                                      e.key === "ArrowUp" ||
-                                      e.key === "ArrowDown"
-                                    ) {
-                                      e.preventDefault();
-                                    }
-                                  }}
-                                  inputProps={{
-                                    min: question.lowPoints,
-                                    max: question.highPoints,
-                                    step: 0.5,
-                                  }}
+                                  onErrorChange={(hasError) =>
+                                    setFieldError(`${team.id}-${question.id}`, hasError)
+                                  }
                                   sx={{
+                                    "& .MuiFormHelperText-root": {
+                                      mx: 0,
+                                      fontSize: "0.65rem",
+                                      lineHeight: 1.2,
+                                    },
                                     width: { xs: "60px", sm: "75px" },
                                     "& .MuiInputBase-input": {
                                       fontSize: {
@@ -1353,7 +1314,7 @@ export default function MultiTeamScoreSheet({
           <Button
             variant="contained"
             onClick={() => setOpenAreYouSure(true)}
-            disabled={!allFieldsFilled}
+            disabled={!allFieldsFilled || hasFieldErrors || isSubmitting}
             sx={{
               mt: { xs: 2, sm: 3 },
               bgcolor: theme.palette.success.main,
@@ -1367,7 +1328,7 @@ export default function MultiTeamScoreSheet({
               fontWeight: 600,
             }}
           >
-            Submit All
+            {isSubmitting ? "Submitting…" : "Submit All"}
           </Button>
 
           <AreYouSureModal

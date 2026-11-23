@@ -416,43 +416,53 @@ export const useScoreSheetStore = create<ScoreSheetState>()(
         }
       },
       
-      // Submit multiple score sheets (mark as submitted) - optimized for instant updates
+      // Submit multiple score sheets (mark as submitted). Each team is sent
+      // separately; only the ones the server confirms are marked submitted.
       submitMultipleScoreSheets: async (scoreSheets: Partial<ScoreSheet>[]) => {
-        // Optimistically update local state first for instant UI feedback
-        const currentSheets = get().multipleScoreSheets;
-        if (currentSheets) {
-          const updatedSheets = currentSheets.map(sheet => {
-            const update = scoreSheets.find(s => s.id === sheet.id);
-            if (update) {
-              return { ...sheet, ...update, isSubmitted: true };
-            }
-            return sheet;
-          });
-          set({ multipleScoreSheets: updatedSheets });
-        }
-        
         set({ isLoadingScoreSheet: true });
         try {
-          const submitPromises = scoreSheets.map(sheet => 
-            api.post(`/api/scoreSheet/edit/`, {
-              ...sheet,
-              isSubmitted: true
-            })
+          const results = await Promise.allSettled(
+            scoreSheets.map((sheet) =>
+              api.post(
+                `/api/scoreSheet/edit/`,
+                { ...sheet, isSubmitted: true },
+                { timeout: 20000 }
+              )
+            )
           );
-          
-          await Promise.all(submitPromises);
-          set({ scoreSheetError: null });
-          
-          // Show success toast for multiple submissions
-          toast.success(`${scoreSheets.length} scoresheets submitted successfully!`);
-        } catch (error) {
+          const submittedIds = new Set(
+            scoreSheets
+              .filter((_, index) => results[index].status === "fulfilled")
+              .map((sheet) => sheet.id)
+          );
+
+          // Keep what the judge entered for every team, but only mark the
+          // confirmed ones as submitted.
+          const currentSheets = get().multipleScoreSheets;
           if (currentSheets) {
-            set({ multipleScoreSheets: currentSheets });
+            set({
+              multipleScoreSheets: currentSheets.map((sheet) => {
+                const update = scoreSheets.find((s) => s.id === sheet.id);
+                if (!update) return sheet;
+                return { ...sheet, ...update, isSubmitted: submittedIds.has(sheet.id) };
+              }),
+            });
           }
+
+          const failed = scoreSheets.length - submittedIds.size;
+          if (failed === 0) {
+            set({ scoreSheetError: null });
+            toast.success(`${scoreSheets.length} scoresheets submitted successfully!`);
+            return;
+          }
+
           set({ scoreSheetError: "Failed to submit multiple score sheets" });
-          toast.error("Failed to submit scoresheets. Please try again.");
-          console.error("Failed to submit multiple score sheets:", error);
-          throw error;
+          toast.error(
+            submittedIds.size === 0
+              ? "Failed to submit scoresheets. Please try again."
+              : `${submittedIds.size} of ${scoreSheets.length} scoresheets were submitted, ${failed} failed. Please try again.`
+          );
+          throw new Error(`${failed} of ${scoreSheets.length} scoresheets failed to submit`);
         } finally {
           set({ isLoadingScoreSheet: false });
         }

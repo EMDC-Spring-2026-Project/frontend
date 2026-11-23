@@ -3,11 +3,11 @@ export const generalPenaltiesQuestions = [
     id: 1,
     field: "field1",
     questionText: "Reflection longer than 1 page",
-    pointValue: 5,
+    pointValue: 10, // 2026 Handbook p.3
     penaltyType: "Journal",
     isIncrement: false,
     yesOrNo: "Yes",
-    pointText: "-5 points",
+    pointText: "-10 points",
     incrementLowerBound: undefined,
     incrementUpperBound: undefined,
   },
@@ -50,7 +50,8 @@ export const generalPenaltiesQuestions = [
   {
     id: 5,
     field: "field5",
-    questionText: "Not Enough Steps - Sr. 15-20 Steps / Jr. 10-15 Steps",
+    // 2026 Handbook p.3: too many OR too few steps is one 10-point penalty.
+    questionText: "Wrong Number of Steps (Too Many or Too Few) - Sr. 15-20 Steps / Jr. 10-15 Steps",
     pointValue: 10,
     penaltyType: "Machine Specification",
     isIncrement: false,
@@ -62,7 +63,8 @@ export const generalPenaltiesQuestions = [
   {
     id: 6,
     field: "field6",
-    questionText: "Each Step Not Labeled",
+    // 2026 Handbook p.3: 10 points in total, however many steps are unlabeled.
+    questionText: "Steps Not Labeled (10 points total, any number of steps)",
     pointValue: 10,
     penaltyType: "Machine Specification",
     isIncrement: false,

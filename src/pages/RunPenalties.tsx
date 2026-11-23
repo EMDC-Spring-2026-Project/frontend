@@ -21,6 +21,9 @@ import useMapScoreSheetStore from "../store/map_stores/mapScoreSheetStore";
 import { useScoreSheetStore } from "../store/primary_stores/scoreSheetStore";
 import AreYouSureModal from "../components/Modals/AreYouSureModal";
 import { runPenaltiesQuestions } from "../data/runPenaltiesQuestions";
+import { penaltyCountFromPoints } from "../utils/penalties";
+import { useScoreDraft } from "../utils/useScoreDraft";
+import DraftRestoredNotice from "../components/DraftRestoredNotice";
 import { ScoreSheet } from "../types";
 import PenaltyCategory from "../components/PenaltyCategory";
 import toast from "react-hot-toast";
@@ -72,12 +75,18 @@ export default function Penalties() {
     }
   }, [parsedTeamId, fetchTeamById]);
 
+  // Which judge+team's sheet has finished loading. The store keeps the last
+  // sheet in session storage, so it may briefly hold another team's sheet.
+  const sheetKey = parsedJudgeId && parsedTeamId ? `${parsedJudgeId}:${parsedTeamId}:4` : null;
+  const [loadedSheetKey, setLoadedSheetKey] = useState<string | null>(null);
+
   // Load scoresheet data in one optimized call (sheetType 4 = run penalties)
   useEffect(() => {
     if (parsedJudgeId && parsedTeamId) {
       fetchScoreSheetWithData(parsedJudgeId, parsedTeamId, 4)
         .then((scoresheetData) => {
           setScoreSheet(scoresheetData);
+          setLoadedSheetKey(`${parsedJudgeId}:${parsedTeamId}:4`);
         })
         .catch((error) => {
           console.error('Error fetching run penalties scoresheet:', error);
@@ -101,7 +110,7 @@ export default function Penalties() {
           if (i === 9) {
             newPenaltyState[i] = ""; // comments row
           } else if (pointValue != undefined) {
-            newPenaltyState[i] = fieldValue === 0 ? 0 : Math.abs(fieldValue) / pointValue;
+            newPenaltyState[i] = penaltyCountFromPoints(fieldValue, question);
           }
         } else {
           if (i === 9) {
@@ -116,6 +125,14 @@ export default function Penalties() {
       setPenaltyState({});
     }
   }, [scoreSheet]);
+
+  // Keep ticked-but-unsaved penalties across a refresh (#11)
+  const { restored, markSaved, discardDraft } = useScoreDraft({
+    draftKey: sheetKey,
+    ready: !!sheetKey && loadedSheetKey === sheetKey && !!scoreSheet,
+    values: penaltyState,
+    setValues: setPenaltyState,
+  });
 
   /**
    * Convert current penaltyState (occurrence counts) into scored fields for persistence.
@@ -140,10 +157,15 @@ export default function Penalties() {
   const handleSavePenalties = async () => {
     if (scoreSheet) {
       const penalties = calculatePenalties();
-      await updateScores({
-        id: scoreSheet.id,
-        ...penalties,
-      });
+      try {
+        await updateScores({
+          id: scoreSheet.id,
+          ...penalties,
+        });
+        markSaved();
+      } catch {
+        // updateScores already shows the error toast; the draft is kept.
+      }
     }
   };
 
@@ -160,6 +182,7 @@ export default function Penalties() {
           isSubmitted: true,
           ...penalties,
         });
+        markSaved();
       }
       setOpenAreYouSure(false);
       
@@ -265,6 +288,12 @@ export default function Penalties() {
           </Stack>
 
           <Divider />
+
+          {restored && (
+            <Box sx={{ px: { xs: 2, sm: 3 }, pt: 2 }}>
+              <DraftRestoredNotice onDiscard={discardDraft} />
+            </Box>
+          )}
 
           {/* Helper text + Save button */}
           <Stack spacing={1.25} direction={{ xs: "column", sm: "row" }} sx={{ px: 3, py: 2 }} alignItems={{ xs: "flex-start", sm: "center" }} justifyContent="space-between">

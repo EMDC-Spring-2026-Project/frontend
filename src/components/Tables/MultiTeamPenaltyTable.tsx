@@ -27,6 +27,9 @@ import { useNavigate } from "react-router-dom";
 import AreYouSureModal from "../Modals/AreYouSureModal";
 import { bulkPenaltyKey, useScoreSheetStore } from "../../store/primary_stores/scoreSheetStore";
 import BulkScoreLoadError from "./BulkScoreLoadError";
+import { useScoreDraft } from "../../utils/useScoreDraft";
+import DraftRestoredNotice from "../DraftRestoredNotice";
+import { penaltyCountFromPoints } from "../../utils/penalties";
 import { useMapScoreSheetStore } from "../../store/map_stores/mapScoreSheetStore"; // 👈 add this
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
@@ -138,6 +141,7 @@ export default function MultiTeamPenaltyTable({
   }, [multipleScoreSheets]);
 
   const [openAreYouSure, setOpenAreYouSure] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
 
   const handleToggle = (category: string) => {
@@ -187,18 +191,24 @@ export default function MultiTeamPenaltyTable({
         newPenaltyState[sheet.teamId] = {};
 
         penalties.forEach((penalty) => {
-          const fieldValue = Number(
-            sheet[penalty.field as keyof typeof sheet] || 0
+          newPenaltyState[sheet.teamId][penalty.id] = penaltyCountFromPoints(
+            sheet[penalty.field as keyof typeof sheet],
+            penalty
           );
-          const count =
-            fieldValue === 0 ? 0 : Math.abs(fieldValue) / penalty.pointValue;
-          newPenaltyState[sheet.teamId][penalty.id] = count;
         });
       });
 
       setPenaltyState(newPenaltyState);
     }
   }, [loadedSheets, penalties]);
+
+  // Keep ticked-but-unsaved penalties across a refresh (#11)
+  const { restored, markSaved, discardDraft } = useScoreDraft({
+    draftKey: judgeId ? `multi-penalty:${judgeId}:${contestId}:${sheetType}` : null,
+    ready: currentLoad?.state === "ready" && !!loadedSheets,
+    values: penaltyState,
+    setValues: setPenaltyState,
+  });
 
   const handleCheckboxChange = (teamId: number, penaltyId: number) => {
     setPenaltyState((prev) => ({
@@ -280,6 +290,7 @@ export default function MultiTeamPenaltyTable({
 
     if (updatedSheets.length > 0) {
       await updateMultipleScores(updatedSheets);
+      markSaved();
       toast.success("Scores saved successfully!");
 
       if (judgeId) {
@@ -292,6 +303,7 @@ export default function MultiTeamPenaltyTable({
 
   const handleSubmit = async () => {
     if (!multipleScoreSheets || multipleScoreSheets.length === 0) return;
+    if (isSubmitting) return;
 
     const penaltyValues = calculatePenaltyValues();
     const updatedSheets: any[] = [];
@@ -309,8 +321,10 @@ export default function MultiTeamPenaltyTable({
     });
 
     if (updatedSheets.length > 0) {
+      setIsSubmitting(true);
       try {
         await submitMultipleScoreSheets(updatedSheets);
+        markSaved();
 
         if (judgeId) {
           fetchScoreSheetsByJudge(judgeId).catch(() => {});
@@ -320,6 +334,8 @@ export default function MultiTeamPenaltyTable({
       } catch (error) {
         console.error("Unable to submit all team penalty sheets:", error);
         setOpenAreYouSure(false);
+      } finally {
+        setIsSubmitting(false);
       }
     } else {
       setOpenAreYouSure(false);
@@ -526,6 +542,8 @@ export default function MultiTeamPenaltyTable({
               *Use checkboxes for yes/no penalties, counters for occurrences
             </Typography>
           </Box>
+
+          {restored && <DraftRestoredNotice onDiscard={discardDraft} />}
 
           {/* Action buttons */}
           <Box
@@ -1118,6 +1136,7 @@ export default function MultiTeamPenaltyTable({
           <Button
             variant="contained"
             onClick={() => setOpenAreYouSure(true)}
+            disabled={isSubmitting}
             sx={{
               mt: { xs: 2, sm: 3 },
               bgcolor: theme.palette.success.main,
@@ -1131,7 +1150,7 @@ export default function MultiTeamPenaltyTable({
               fontWeight: 600,
             }}
           >
-            Submit All
+            {isSubmitting ? "Submitting…" : "Submit All"}
           </Button>
 
           <AreYouSureModal

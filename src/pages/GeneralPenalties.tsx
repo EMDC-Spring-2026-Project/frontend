@@ -28,6 +28,9 @@ import useMapScoreSheetStore from "../store/map_stores/mapScoreSheetStore";
 import { useScoreSheetStore } from "../store/primary_stores/scoreSheetStore";
 import AreYouSureModal from "../components/Modals/AreYouSureModal";
 import { generalPenaltiesQuestions } from "../data/generalPenaltiesQuestions";
+import { penaltyCountFromPoints } from "../utils/penalties";
+import { useScoreDraft } from "../utils/useScoreDraft";
+import DraftRestoredNotice from "../components/DraftRestoredNotice";
 import PenaltyCategory from "../components/PenaltyCategory";
 import { ScoreSheet } from "../types";
 import { useJudgeStore } from "../store/primary_stores/judgeStore";
@@ -81,12 +84,23 @@ export default function GeneralPenalties() {
     }
   }, [parsedTeamId, fetchTeamById]);
 
+  // Which judge+team's sheet has finished loading. The store keeps the last
+  // sheet in session storage, so it may briefly hold another team's sheet.
+  const sheetKey = parsedJudgeId && parsedTeamId ? `${parsedJudgeId}:${parsedTeamId}:5` : null;
+  const [loadedSheetKey, setLoadedSheetKey] = useState<string | null>(null);
+
   // Resolve scoreSheetId mapping for this judge+team (sheetType 5 = general penalties)
   useEffect(() => {
     if (parsedJudgeId && parsedTeamId) {
-      fetchScoreSheetId(parsedJudgeId, parsedTeamId, 5);
+      const key = `${parsedJudgeId}:${parsedTeamId}:5`;
+      fetchScoreSheetId(parsedJudgeId, parsedTeamId, 5)
+        .then(() => {
+          const id = useMapScoreSheetStore.getState().scoreSheetId;
+          return id ? fetchScoreSheetById(id).then(() => setLoadedSheetKey(key)) : undefined;
+        })
+        .catch((error) => console.error("Error loading general penalties sheet:", error));
     }
-  }, [parsedTeamId, parsedJudgeId, fetchScoreSheetId]);
+  }, [parsedTeamId, parsedJudgeId, fetchScoreSheetId, fetchScoreSheetById]);
 
   // Load the score sheet after we know the id
   useEffect(() => {
@@ -102,9 +116,10 @@ export default function GeneralPenalties() {
       const newPenaltyState: { [key: number]: number } = {};
 
       generalPenaltiesQuestions.forEach((question) => {
-        const fieldValue = Number(scoreSheet[question.field as keyof ScoreSheet]);
-        const pointValue = question.pointValue;
-        newPenaltyState[question.id] = fieldValue === 0 ? 0 : Math.abs(fieldValue) / pointValue;
+        newPenaltyState[question.id] = penaltyCountFromPoints(
+          scoreSheet[question.field as keyof ScoreSheet],
+          question
+        );
       });
 
       setPenaltyState(newPenaltyState);
@@ -112,6 +127,14 @@ export default function GeneralPenalties() {
       setPenaltyState({});
     }
   }, [scoreSheet, parsedJudgeId, parsedTeamId]);
+
+  // Keep ticked-but-unsaved penalties across a refresh (#11)
+  const { restored, markSaved, discardDraft } = useScoreDraft({
+    draftKey: sheetKey,
+    ready: !!sheetKey && loadedSheetKey === sheetKey && !!scoreSheet,
+    values: penaltyState,
+    setValues: setPenaltyState,
+  });
 
   // Convert current counts to scored fields (points) before save/submit
   const calculatePenalties = () => {
@@ -128,7 +151,12 @@ export default function GeneralPenalties() {
   const handleSavePenalties = async () => {
     if (scoreSheet) {
       const penalties = calculatePenalties();
-      await updateScores({ id: scoreSheet.id, ...penalties });
+      try {
+        await updateScores({ id: scoreSheet.id, ...penalties });
+        markSaved();
+      } catch {
+        // updateScores already shows the error toast; the draft is kept.
+      }
     }
   };
 
@@ -143,6 +171,7 @@ export default function GeneralPenalties() {
           isSubmitted: true,
           ...penalties,
         });
+        markSaved();
       }
       setOpenAreYouSure(false);
       navigate(-1);
@@ -259,6 +288,12 @@ export default function GeneralPenalties() {
           </Stack>
 
           <Divider />
+
+          {restored && (
+            <Box sx={{ px: { xs: 2, sm: 3 }, pt: 2 }}>
+              <DraftRestoredNotice onDiscard={discardDraft} />
+            </Box>
+          )}
 
           {/* Helper text and Save action */}
           <Stack
