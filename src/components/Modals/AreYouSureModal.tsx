@@ -8,7 +8,8 @@
  * - Consistent typography with bold titles
  * - Modern form styling with proper spacing
  */
-import { Button, Container } from "@mui/material";
+import { Button, Container, Typography } from "@mui/material";
+import type { ReactNode } from "react";
 import Modal from "./Modal";
 import theme from "../../theme";
 
@@ -17,10 +18,14 @@ export interface IAreYouSureModalProps {
   handleClose: () => void;
   title: string;
   handleSubmit: () => void;
+  /** Optional explanation shown above the buttons. */
+  message?: ReactNode;
+  /** Disables "Yes", e.g. while the message is still loading. */
+  confirmDisabled?: boolean;
 }
 
 export default function AreYouSureModal(props: IAreYouSureModalProps) {
-  const { handleClose, handleSubmit, open, title } = props;
+  const { handleClose, handleSubmit, open, title, message, confirmDisabled } = props;
 
   const handleSubmitModal = () => {
     handleSubmit();
@@ -29,6 +34,14 @@ export default function AreYouSureModal(props: IAreYouSureModalProps) {
 
   return (
     <Modal open={open} handleClose={handleClose} title={title}>
+      {message && (
+        <Typography
+          component="div"
+          sx={{ mb: 1, px: 1, textAlign: "center", fontSize: "0.95rem", color: "text.primary" }}
+        >
+          {message}
+        </Typography>
+      )}
       <Container
         sx={{
           alignItems: "center",
@@ -42,6 +55,7 @@ export default function AreYouSureModal(props: IAreYouSureModalProps) {
         <Button
           type="button"
           onClick={handleSubmitModal}
+          disabled={confirmDisabled}
           sx={{
             width: 90,
             height: 44,

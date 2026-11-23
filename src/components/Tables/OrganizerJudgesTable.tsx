@@ -33,6 +33,7 @@ import { Button, Container, CircularProgress, Chip } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import CheckIcon from "@mui/icons-material/Check";
 import toast from "react-hot-toast";
+import { api } from "../../lib/api";
 
 // ==============================
 // Store Hooks
@@ -187,6 +188,31 @@ function JudgeRow(props: { row: ReturnType<typeof createDataJudge> }) {
   );
 }
 
+type RemovalScope = "cluster" | "contest" | "system";
+
+const removalScopeText: Record<RemovalScope, string> = {
+  cluster: "in this cluster",
+  contest: "in this contest",
+  system: "in this contest",
+};
+
+/** Explains what removing a judge does to team totals. `count` is null if it couldn't be checked. */
+function removalMessage(count: number | null, scope: RemovalScope): string {
+  const where = removalScopeText[scope];
+  if (count === null) {
+    return `Couldn't check this judge's submitted scores. Any scores they submitted ${where} will stop counting toward team totals.`;
+  }
+  if (count === 0) {
+    return scope === "system"
+      ? `This judge has no submitted score sheets ${where}. Scores they submitted in any other contest will be removed.`
+      : `This judge has no submitted score sheets ${where}, so team totals won't change.`;
+  }
+  const sheets = count === 1 ? "1 score sheet" : `${count} score sheets`;
+  const otherContests =
+    scope === "system" ? " Scores they submitted in any other contest will be removed too." : "";
+  return `This judge has submitted ${sheets} ${where}. If you continue, those scores will stop counting toward team totals, and rankings will change.${otherContests}`;
+}
+
 function JudgesTable(props: IJudgesTableProps) {
   const { judges, clusters, contestid, currentCluster } = props;
   const navigate = useNavigate();
@@ -195,6 +221,9 @@ function JudgesTable(props: IJudgesTableProps) {
   const [openDeleteOptions, setOpenDeleteOptions] = useState(false);
   const [confirmTitle, setConfirmTitle] = useState<string>("");
   const [onConfirm, setOnConfirm] = useState<(() => void) | null>(null);
+  const [confirmMessage, setConfirmMessage] = useState<React.ReactNode>(null);
+  const [confirmLoading, setConfirmLoading] = useState(false);
+  const scoreCheckRequest = React.useRef(0);
   const [judgeData, setJudgeData] = useState<JudgeData | undefined>(undefined);
   const { submissionStatus, checkAllScoreSheetsSubmitted, deleteJudge } = useJudgeStore();
 
@@ -287,6 +316,58 @@ function JudgesTable(props: IJudgesTableProps) {
     setJudgeId(judgeId);
     setOpenDeleteOptions(true);
   }, []);
+
+  // Count the judge's submitted scoresheets that would stop counting.
+  const countSubmittedSheets = async (
+    id: number,
+    scope: RemovalScope
+  ): Promise<number> => {
+    type SheetItem = { scoresheet?: { isSubmitted?: boolean } | null };
+    const submitted = (items: SheetItem[] = []) =>
+      items.filter((item) => item?.scoresheet?.isSubmitted).length;
+
+    // Count within this contest; organizers can't always read other contests.
+    const clusterIds =
+      scope === "cluster" ? (currentCluster ? [currentCluster.id] : []) : clusters.map((c) => c.id);
+    const counts = await Promise.all(
+      clusterIds.map(async (clusterId) => {
+        try {
+          const { data } = await api.get(
+            `/api/mapping/scoreSheet/getSheetsByJudgeAndCluster/${id}/${clusterId}/`
+          );
+          return submitted(data?.ScoreSheets);
+        } catch (error: any) {
+          // The backend answers 403 to organizers when the judge has no
+          // scoresheets in one of their own clusters, so that means none.
+          if (error?.response?.status === 403) return 0;
+          throw error;
+        }
+      })
+    );
+    return counts.reduce((total, n) => total + n, 0);
+  };
+
+  // Ask for confirmation, explaining how many submitted scores will stop counting.
+  const openRemovalConfirm = (title: string, scope: RemovalScope, action: () => void) => {
+    setConfirmTitle(title);
+    setOnConfirm(() => action);
+    setOpenDeleteOptions(false);
+    setConfirmMessage("Checking this judge's submitted scores…");
+    setConfirmLoading(true);
+    setOpenAreYouSure(true);
+
+    const request = ++scoreCheckRequest.current;
+    countSubmittedSheets(judgeId, scope)
+      .then((count) => {
+        if (request === scoreCheckRequest.current) setConfirmMessage(removalMessage(count, scope));
+      })
+      .catch(() => {
+        if (request === scoreCheckRequest.current) setConfirmMessage(removalMessage(null, scope));
+      })
+      .finally(() => {
+        if (request === scoreCheckRequest.current) setConfirmLoading(false);
+      });
+  };
 
   // Memoize navigate handler
   const handleNavigateToJudging = useCallback((judgeId: number) => {
@@ -637,12 +718,11 @@ function JudgesTable(props: IJudgesTableProps) {
         >
           <Button
             variant="contained"
-            onClick={() => {
-              setConfirmTitle("Remove judge from contest?");
-              setOnConfirm(() => () => handleDeleteFromAllClusters(judgeId));
-              setOpenDeleteOptions(false);
-              setOpenAreYouSure(true);
-            }}
+            onClick={() =>
+              openRemovalConfirm("Remove judge from contest?", "contest", () =>
+                handleDeleteFromAllClusters(judgeId)
+              )
+            }
             sx={{
               textTransform: "none",
               borderRadius: 2,
@@ -662,12 +742,11 @@ function JudgesTable(props: IJudgesTableProps) {
           </Button>
           <Button
             variant="outlined"
-            onClick={() => {
-              setConfirmTitle("Remove judge from this cluster?");
-              setOnConfirm(() => () => handleDelete(judgeId));
-              setOpenDeleteOptions(false);
-              setOpenAreYouSure(true);
-            }}
+            onClick={() =>
+              openRemovalConfirm("Remove judge from this cluster?", "cluster", () =>
+                handleDelete(judgeId)
+              )
+            }
             sx={{
               textTransform: "none",
               borderRadius: 2,
@@ -688,12 +767,13 @@ function JudgesTable(props: IJudgesTableProps) {
 
           <Button
             variant="contained"
-            onClick={() => {
-              setConfirmTitle("Delete judge completely? This will remove all mappings and data.");
-              setOnConfirm(() => () => handleDeleteCompletely(judgeId));
-              setOpenDeleteOptions(false);
-              setOpenAreYouSure(true);
-            }}
+            onClick={() =>
+              openRemovalConfirm(
+                "Delete judge completely? This will remove all mappings and data.",
+                "system",
+                () => handleDeleteCompletely(judgeId)
+              )
+            }
             sx={{
               textTransform: "none",
               borderRadius: 2,
@@ -719,6 +799,8 @@ function JudgesTable(props: IJudgesTableProps) {
         open={openAreYouSure}
         handleClose={() => setOpenAreYouSure(false)}
         title={confirmTitle || "Are you sure?"}
+        message={confirmMessage}
+        confirmDisabled={confirmLoading}
         handleSubmit={() => {
           if (onConfirm) onConfirm();
         }}
