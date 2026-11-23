@@ -21,6 +21,7 @@ import useMapScoreSheetStore from "../store/map_stores/mapScoreSheetStore";
 import { useScoreSheetStore } from "../store/primary_stores/scoreSheetStore";
 import AreYouSureModal from "../components/Modals/AreYouSureModal";
 import { runPenaltiesQuestions } from "../data/runPenaltiesQuestions";
+import { penaltyCountFromPoints } from "../utils/penalties";
 import { ScoreSheet } from "../types";
 import PenaltyCategory from "../components/PenaltyCategory";
 import toast from "react-hot-toast";
@@ -101,7 +102,7 @@ export default function Penalties() {
           if (i === 9) {
             newPenaltyState[i] = ""; // comments row
           } else if (pointValue != undefined) {
-            newPenaltyState[i] = fieldValue === 0 ? 0 : Math.abs(fieldValue) / pointValue;
+            newPenaltyState[i] = penaltyCountFromPoints(fieldValue, question);
           }
         } else {
           if (i === 9) {

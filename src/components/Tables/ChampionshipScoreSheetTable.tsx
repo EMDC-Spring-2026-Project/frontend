@@ -29,6 +29,7 @@ import AreYouSureModal from "../Modals/AreYouSureModal";
 import ScoreInput from "../ScoreInput";
 import { useScoreSheetLoader } from "../../utils/useScoreSheetLoader";
 import BulkScoreLoadError from "./BulkScoreLoadError";
+import { penaltyCountFromPoints } from "../../utils/penalties";
 import { useFieldErrors } from "../../utils/useFieldErrors";
 import PenaltyCategory from "../PenaltyCategory";
 import { machineDesignQuestions } from "../../data/machineDesignQuestions";
@@ -167,12 +168,7 @@ export default function ChampionshipScoreSheetTable({
       generalPenaltiesQuestions.forEach((penalty, index) => {
         const fieldNumber = 19 + index;
         const fieldValue = Number(getattr(scoreSheet, `field${fieldNumber}`, 0)) || 0;
-        // Convert penalty points back to penalty state
-        // For checkboxes: penalty points / point value = 0 or 1
-        // For increments: penalty points / point value = count
-        const pointValue = Number(penalty.pointValue) || 0;
-        const penaltyStateValue = pointValue !== 0 ? fieldValue / pointValue : 0;
-        initialPenaltyState[`general_${penalty.id}`] = penaltyStateValue;
+        initialPenaltyState[`general_${penalty.id}`] = penaltyCountFromPoints(fieldValue, penalty);
       });
       
       // Initialize run penalties (fields 26-42) - skip field9 (id 9) as it's empty
@@ -183,9 +179,7 @@ export default function ChampionshipScoreSheetTable({
         
         const fieldNumber = 26 + runPenaltyFieldIndex;
         const fieldValue = Number(getattr(scoreSheet, `field${fieldNumber}`, 0)) || 0;
-        const pointValue = Number(penalty.pointValue) || 0;
-        const penaltyStateValue = pointValue !== 0 ? fieldValue / pointValue : 0;
-        initialPenaltyState[`run_${penalty.id}`] = penaltyStateValue;
+        initialPenaltyState[`run_${penalty.id}`] = penaltyCountFromPoints(fieldValue, penalty);
         runPenaltyFieldIndex++;
       });
       

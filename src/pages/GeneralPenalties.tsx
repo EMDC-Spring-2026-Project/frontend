@@ -28,6 +28,7 @@ import useMapScoreSheetStore from "../store/map_stores/mapScoreSheetStore";
 import { useScoreSheetStore } from "../store/primary_stores/scoreSheetStore";
 import AreYouSureModal from "../components/Modals/AreYouSureModal";
 import { generalPenaltiesQuestions } from "../data/generalPenaltiesQuestions";
+import { penaltyCountFromPoints } from "../utils/penalties";
 import PenaltyCategory from "../components/PenaltyCategory";
 import { ScoreSheet } from "../types";
 import { useJudgeStore } from "../store/primary_stores/judgeStore";
@@ -102,9 +103,10 @@ export default function GeneralPenalties() {
       const newPenaltyState: { [key: number]: number } = {};
 
       generalPenaltiesQuestions.forEach((question) => {
-        const fieldValue = Number(scoreSheet[question.field as keyof ScoreSheet]);
-        const pointValue = question.pointValue;
-        newPenaltyState[question.id] = fieldValue === 0 ? 0 : Math.abs(fieldValue) / pointValue;
+        newPenaltyState[question.id] = penaltyCountFromPoints(
+          scoreSheet[question.field as keyof ScoreSheet],
+          question
+        );
       });
 
       setPenaltyState(newPenaltyState);

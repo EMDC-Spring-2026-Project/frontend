@@ -27,6 +27,7 @@ import { useNavigate } from "react-router-dom";
 import AreYouSureModal from "../Modals/AreYouSureModal";
 import { bulkPenaltyKey, useScoreSheetStore } from "../../store/primary_stores/scoreSheetStore";
 import BulkScoreLoadError from "./BulkScoreLoadError";
+import { penaltyCountFromPoints } from "../../utils/penalties";
 import { useMapScoreSheetStore } from "../../store/map_stores/mapScoreSheetStore"; // 👈 add this
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
@@ -188,12 +189,10 @@ export default function MultiTeamPenaltyTable({
         newPenaltyState[sheet.teamId] = {};
 
         penalties.forEach((penalty) => {
-          const fieldValue = Number(
-            sheet[penalty.field as keyof typeof sheet] || 0
+          newPenaltyState[sheet.teamId][penalty.id] = penaltyCountFromPoints(
+            sheet[penalty.field as keyof typeof sheet],
+            penalty
           );
-          const count =
-            fieldValue === 0 ? 0 : Math.abs(fieldValue) / penalty.pointValue;
-          newPenaltyState[sheet.teamId][penalty.id] = count;
         });
       });
 
